@@ -1,6 +1,10 @@
+import json
+
+import pytest
+
 from finrag.agent import FinRAGAgent
 from finrag.eval.answer_eval import judge_answer, run, summarize
-from finrag.eval.build_dataset import build_dataset, sample_chunks
+from finrag.eval.build_dataset import build_dataset, build_dataset_file, sample_chunks
 from finrag.llm import Completion, ExtractiveLLM, strip_code_fence
 from finrag.metrics import cost_usd
 from finrag.schemas import Answer
@@ -99,3 +103,19 @@ def test_gera_dataset_e_descarta_skip(chunks):
     rows = build_dataset(llm, chunks, n=3, min_chars=50)
     assert len(rows) == 1 and rows[0]["synthetic"]
     assert rows[0]["relevant"][0]["article"]
+
+
+def test_dataset_gravado_a_cada_pergunta_e_retomado_apos_falha(chunks, tmp_path):
+    output = tmp_path / "perguntas.jsonl"
+    # A terceira chamada falha (a lista de respostas acaba), como uma queda no meio da rodada.
+    falha = ScriptedLLM(['{"question": "P1?"}', '{"question": "P2?"}'])
+    with pytest.raises(IndexError):
+        build_dataset_file(falha, chunks, n=4, output=output, seed=1, min_chars=50)
+    assert len(output.read_text(encoding="utf-8").splitlines()) == 2  # já pagas, não perdidas
+
+    retomada = ScriptedLLM(['{"question": "P3?"}', '{"question": "P4?"}'])
+    new, existing = build_dataset_file(retomada, chunks, n=4, output=output, seed=1, min_chars=50)
+    assert (new, existing) == (2, 2) and retomada.replies == []  # só os chunks que faltavam
+    rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+    assert [r["question"] for r in rows] == ["P1?", "P2?", "P3?", "P4?"]
+    assert len({r["chunk_id"] for r in rows}) == 4

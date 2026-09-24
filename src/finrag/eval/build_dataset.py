@@ -16,6 +16,7 @@ import argparse
 import json
 import random
 from collections import defaultdict
+from collections.abc import Callable, Collection
 from pathlib import Path
 
 from finrag.config import get_settings, load_api_keys
@@ -59,20 +60,67 @@ def generate_question(llm: LLM, chunk: Chunk) -> str | None:
     return None if not question or question.upper() == "SKIP" else question
 
 
-def build_dataset(llm: LLM, chunks: list[Chunk], n: int, min_chars: int = 200, seed: int = 42):
+def build_dataset(
+    llm: LLM,
+    chunks: list[Chunk],
+    n: int,
+    min_chars: int = 200,
+    seed: int = 42,
+    skip_ids: Collection[str] = (),
+    on_row: Callable[[dict], None] | None = None,
+) -> list[dict]:
+    """Gera as perguntas. `skip_ids` pula chunks já processados; `on_row` recebe cada linha
+    assim que ela é gerada, para gravação incremental."""
     rows = []
     for chunk in sample_chunks(chunks, n, min_chars, seed):
+        if chunk.id in skip_ids:
+            continue
         question = generate_question(llm, chunk)
         if question:
-            rows.append(
-                {
-                    "question": question,
-                    "relevant": [{"source": chunk.source, "article": chunk.article}],
-                    "chunk_id": chunk.id,
-                    "synthetic": True,
-                }
-            )
+            row = {
+                "question": question,
+                "relevant": [{"source": chunk.source, "article": chunk.article}],
+                "chunk_id": chunk.id,
+                "synthetic": True,
+            }
+            rows.append(row)
+            if on_row:
+                on_row(row)
     return rows
+
+
+def existing_chunk_ids(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {json.loads(line)["chunk_id"] for line in f if line.strip()}
+
+
+def build_dataset_file(
+    llm: LLM,
+    chunks: list[Chunk],
+    n: int,
+    output: str | Path,
+    seed: int = 42,
+    min_chars: int = 200,
+) -> tuple[int, int]:
+    """Grava cada pergunta assim que ela é gerada e retoma de onde parou.
+
+    Uma falha no meio (saldo, rede, 429) não perde as perguntas já pagas: ao rodar de novo
+    com a mesma semente, a amostra é a mesma e os chunks que já estão no arquivo são pulados.
+    Devolve (novas, já existentes).
+    """
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    done = existing_chunk_ids(path)
+    with open(path, "a", encoding="utf-8") as f:
+
+        def write(row: dict) -> None:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+
+        rows = build_dataset(llm, chunks, n, min_chars, seed, skip_ids=done, on_row=write)
+    return len(rows), len(done)
 
 
 def main() -> None:
@@ -85,12 +133,11 @@ def main() -> None:
 
     s = get_settings()
     chunks = build_vector_store(s).all_chunks()
-    rows = build_dataset(build_judge(s), chunks, args.n, seed=args.seed)
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    print(f"{len(rows)} perguntas geradas a partir de {len(chunks)} chunks -> {args.output}")
+    new, existing = build_dataset_file(build_judge(s), chunks, args.n, args.output, args.seed)
+    print(
+        f"{new} perguntas novas ({existing} já existiam) a partir de {len(chunks)} chunks "
+        f"-> {args.output}"
+    )
 
 
 if __name__ == "__main__":
