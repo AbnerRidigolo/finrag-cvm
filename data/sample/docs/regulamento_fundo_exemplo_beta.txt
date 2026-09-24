@@ -1,0 +1,16 @@
+REGULAMENTO DO FUNDO EXEMPLO BETA FIP
+(Documento fictício criado para demonstração e testes. Não é um regulamento real nem texto oficial da CVM.)
+
+Art. 1º O Fundo Exemplo Beta é um fundo de investimento em participações, constituído sob a forma de condomínio fechado, destinado exclusivamente a investidores qualificados.
+
+Art. 2º O fundo tem por objetivo investir em ações de companhias fechadas do setor de tecnologia, participando do processo decisório das companhias investidas, inclusive por meio da indicação de membros do conselho de administração.
+
+Art. 3º O período de investimento é de três anos contados da primeira integralização de cotas, podendo ser prorrogado uma única vez por deliberação da assembleia geral.
+
+Art. 4º A taxa de administração é de 2% ao ano sobre o capital comprometido durante o período de investimento e de 1,5% ao ano sobre o patrimônio líquido após esse período.
+
+Art. 5º A taxa de performance corresponde a 20% dos rendimentos distribuídos aos cotistas que excederem o capital integralizado corrigido pelo IPCA acrescido de 8% ao ano.
+
+Art. 6º Os cotistas se comprometem, no boletim de subscrição, a integralizar suas cotas mediante chamadas de capital realizadas pelo gestor, com prazo de quinze dias para o aporte.
+
+Art. 7º O cotista que não integralizar as cotas no prazo de uma chamada de capital será considerado inadimplente e terá seus direitos políticos e econômicos suspensos até a regularização.

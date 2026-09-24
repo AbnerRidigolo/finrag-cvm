@@ -1,0 +1,18 @@
+REGULAMENTO DO FUNDO EXEMPLO ALPHA FIDC
+(Documento fictício criado para demonstração e testes. Não é um regulamento real nem texto oficial da CVM.)
+
+Art. 1º O Fundo Exemplo Alpha é um fundo de investimento em direitos creditórios, constituído sob a forma de condomínio fechado, com prazo de duração de cinco anos.
+
+Art. 2º O objetivo do fundo é proporcionar aos cotistas a valorização de suas cotas por meio da aquisição de direitos creditórios originados de operações de crédito a pequenas e médias empresas.
+
+Art. 3º O fundo deve manter, no mínimo, 67% do seu patrimônio líquido aplicado em direitos creditórios. A parcela remanescente poderá ser aplicada em títulos públicos federais e operações compromissadas.
+
+Art. 4º A taxa de administração é de 1,2% ao ano sobre o patrimônio líquido do fundo, calculada e provisionada diariamente e paga mensalmente ao administrador.
+
+Art. 5º Será devida taxa de performance de 20% sobre a rentabilidade que exceder 100% do CDI, apurada semestralmente, observada a linha d'água.
+
+Art. 6º As cotas do fundo dividem-se em cotas seniores e cotas subordinadas. As cotas subordinadas devem representar, no mínimo, 25% do patrimônio líquido, formando o índice de subordinação.
+
+Art. 7º O resgate das cotas somente ocorrerá ao término do prazo de duração do fundo ou em caso de liquidação antecipada deliberada em assembleia geral de cotistas.
+
+Art. 8º A assembleia geral de cotistas será convocada com antecedência mínima de dez dias, por meio de correspondência eletrônica encaminhada a cada cotista.

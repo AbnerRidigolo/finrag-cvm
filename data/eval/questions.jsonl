@@ -1,0 +1,10 @@
+{"question": "Qual é a taxa de administração do Fundo Exemplo Alpha?", "relevant": [{"source": "regulamento_fundo_exemplo_alpha.txt", "article": "Art.4º"}]}
+{"question": "Qual o percentual mínimo de cotas subordinadas no FIDC Alpha?", "relevant": [{"source": "regulamento_fundo_exemplo_alpha.txt", "article": "Art.6º"}]}
+{"question": "Quanto do patrimônio do Alpha precisa estar em direitos creditórios?", "relevant": [{"source": "regulamento_fundo_exemplo_alpha.txt", "article": "Art.3º"}]}
+{"question": "Com quanto tempo de antecedência a assembleia de cotistas é convocada?", "relevant": [{"source": "regulamento_fundo_exemplo_alpha.txt", "article": "Art.8º"}]}
+{"question": "Qual é o período de investimento do Fundo Exemplo Beta?", "relevant": [{"source": "regulamento_fundo_exemplo_beta.txt", "article": "Art.3º"}]}
+{"question": "O que acontece com o cotista que não atende a uma chamada de capital?", "relevant": [{"source": "regulamento_fundo_exemplo_beta.txt", "article": "Art.7º"}]}
+{"question": "Como é calculada a taxa de performance do FIP Beta?", "relevant": [{"source": "regulamento_fundo_exemplo_beta.txt", "article": "Art.5º"}]}
+{"question": "Quem pode investir no Fundo Exemplo Beta?", "relevant": [{"source": "regulamento_fundo_exemplo_beta.txt", "article": "Art.1º"}]}
+{"question": "O que é linha d'água?", "relevant": [{"source": "glossario_fundos.txt", "article": "Art.5º"}]}
+{"question": "Qual a diferença entre gestor e administrador fiduciário?", "relevant": [{"source": "glossario_fundos.txt", "article": "Art.2º"}, {"source": "glossario_fundos.txt", "article": "Art.1º"}]}
