@@ -1,6 +1,9 @@
 """API HTTP do FinRAG."""
 
+from importlib.resources import files
+
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
@@ -30,6 +33,12 @@ def create_app(agent: FinRAGAgent | None = None) -> FastAPI:
                 load_api_keys()
                 state["agent"] = build_agent()
         return state["agent"]
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def index() -> str:
+        # Lido do pacote, e não de um caminho relativo, para funcionar também quando o
+        # pacote é instalado sem o modo editável (como no Docker).
+        return files("finrag").joinpath("static/index.html").read_text(encoding="utf-8")
 
     @app.get("/health")
     def health() -> dict[str, str]:
