@@ -17,6 +17,7 @@ data/raw/
 data/processed/
 .chroma/
 *.parquet
+*.pdf
 
 # SO / IDE
 .DS_Store
