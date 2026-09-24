@@ -77,11 +77,11 @@
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
   .skip {
-    position: absolute; left: 12px; top: -48px; z-index: 50;
+    position: absolute; left: 12px; top: 12px; z-index: 50;
     background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 8px;
-    box-shadow: var(--shadow);
+    transform: translateY(-200%);
   }
-  .skip:focus { top: 12px; }
+  .skip:focus { transform: none; box-shadow: var(--shadow); }
 
   /* ---------- Cabeçalho ---------- */
   .topbar {
@@ -377,7 +377,7 @@
     overflow-wrap: anywhere; hyphens: auto;
   }
   .doc-text p { margin: 0 0 14px; }
-  .doc-text p:first-child::first-line { font-weight: 600; }
+  .doc-text strong { font-weight: 650; }
   .panel-foot {
     padding: 12px 24px; border-top: 1px solid var(--line);
     font-size: 12px; color: var(--ink-3);
@@ -406,7 +406,7 @@
     .src-score { grid-column: 2; text-align: left; }
     .src-score small { display: inline; margin-right: 6px; }
     .composer-wrap { padding: 14px 12px 12px; }
-    .hint .keys { display: none; }
+    .hint .keys, .panel-foot .keys { display: none; }
     .panel {
       top: auto; left: 0; width: 100%; max-height: 82vh;
       border-left: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
@@ -502,7 +502,7 @@
     </dl>
     <div class="doc-text" id="panel-text"></div>
   </div>
-  <div class="panel-foot">Trecho recuperado pela busca e enviado como contexto para gerar a resposta. <kbd>Esc</kbd> fecha · <kbd>←</kbd> <kbd>→</kbd> navegam.</div>
+  <div class="panel-foot">Trecho recuperado pela busca e enviado como contexto para gerar a resposta.<span class="keys"> <kbd>Esc</kbd> fecha · <kbd>←</kbd> <kbd>→</kbd> navegam.</span></div>
 </aside>
 
 <div class="sr-only" id="announcer" aria-live="polite"></div>
@@ -545,7 +545,7 @@
   let open = null;           // { turn, index, opener }
 
   const nf = (digits) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  const fmtSeconds = (ms) => `${nf(1).format(ms / 1000)} s`;
+  const fmtSeconds = (ms) => (ms < 1000 ? `${Math.round(ms)} ms` : `${nf(1).format(ms / 1000)} s`);
   const fmtInt = (n) => new Intl.NumberFormat("pt-BR").format(n);
   const fmtUsd = (v) => "US$ " + new Intl.NumberFormat("pt-BR", {
     minimumFractionDigits: 2, maximumFractionDigits: v > 0 && v < 0.01 ? 6 : 4,
@@ -585,6 +585,12 @@
     return i > 0 ? [title.slice(0, i), title.slice(i + 3)] : ["", title];
   }
   const fmtArticle = (a) => (a || "").replace(/^(Art\.)(?=\S)/, "$1 ").trim();
+  // Destaca o rótulo do dispositivo no início do parágrafo: "Art. 4º", "Artigo 40º", "§ 2º".
+  const LABEL_RE = /^(?:Art(?:igo)?\.?\s*\d+(?:-[A-Z])?[º°o]?|Cláusula\s+\d+(?:\.\d+)*[º°]?|§\s*\d+[º°]?|Parágrafo\s+(?:\d+[º°]?|[A-ZÀ-Ú][a-zà-ú]+))\.?(?=\s)/;
+  function paragraph(text) {
+    const m = text.match(LABEL_RE);
+    return m ? el("p", {}, el("strong", {}, m[0]), text.slice(m[0].length)) : el("p", {}, text);
+  }
 
   // O texto vem do PDF com quebras de linha rígidas: junta as linhas de cada parágrafo.
   // É só exibição; o texto do trecho na API não muda.
@@ -736,7 +742,7 @@
     $("panel-file").textContent = src.source;
     $("panel-score").textContent = fmtScore(src.score);
     const body = $("panel-text");
-    body.replaceChildren(...reflow(src.text || src.excerpt).map((p) => el("p", {}, p)));
+    body.replaceChildren(...reflow(src.text || src.excerpt).map(paragraph));
     panel.querySelector(".panel-body").scrollTop = 0;
     $("panel-prev").disabled = index === 0;
     $("panel-next").disabled = index === turn.data.sources.length - 1;
@@ -807,7 +813,7 @@
     );
     const t0 = performance.now();
     let k = 0;
-    const tick = setInterval(() => { elapsed.textContent = fmtSeconds(performance.now() - t0); }, 100);
+    const tick = setInterval(() => { elapsed.textContent = `${nf(1).format((performance.now() - t0) / 1000)} s`; }, 100);
     const rotate = setInterval(() => {
       if (k >= WAIT_MESSAGES.length - 1) return;
       msg.classList.add("fade");
