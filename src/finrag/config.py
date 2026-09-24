@@ -1,5 +1,6 @@
 """Configuração centralizada, lida de variáveis de ambiente ou do arquivo .env."""
 
+import os
 from functools import lru_cache
 from typing import Literal
 
@@ -48,3 +49,18 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def load_api_keys(env_file: str = ".env") -> None:
+    """Exporta as chaves de API (*_API_KEY) do .env para os.environ.
+
+    O Settings lê o .env só para os próprios campos; os SDKs (OpenAI, Anthropic, Pinecone)
+    procuram a chave em os.environ. Deve ser chamada só nos pontos de entrada (CLIs e a
+    construção do agente real na API), nunca na importação de módulos, para que os testes
+    não carreguem chaves reais. Variáveis já definidas no ambiente têm precedência.
+    """
+    from dotenv import dotenv_values
+
+    for key, value in dotenv_values(env_file).items():
+        if key.endswith("_API_KEY") and value and key not in os.environ:
+            os.environ[key] = value

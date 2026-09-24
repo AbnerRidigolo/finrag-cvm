@@ -19,7 +19,7 @@ import statistics
 from pathlib import Path
 
 from finrag.agent import FinRAGAgent
-from finrag.config import get_settings
+from finrag.config import get_settings, load_api_keys
 from finrag.eval.retrieval_eval import load_dataset
 from finrag.factory import build_agent
 from finrag.llm import LLM, build_judge, strip_code_fence
@@ -135,6 +135,7 @@ def summarize(results: list[dict]) -> dict:
 
 
 def main() -> None:
+    load_api_keys()
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset")
     parser.add_argument("-n", type=int, default=0, help="Limita o número de perguntas")

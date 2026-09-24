@@ -16,7 +16,7 @@ import statistics
 import time
 from pathlib import Path
 
-from finrag.config import get_settings
+from finrag.config import get_settings, load_api_keys
 from finrag.factory import build_retriever
 from finrag.retrieval.hybrid import HybridRetriever
 from finrag.schemas import RetrievedChunk
@@ -87,6 +87,7 @@ def report(retriever: HybridRetriever, dataset: list[dict], k: int, with_rerank:
 
 
 def main() -> None:
+    load_api_keys()
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset")
     parser.add_argument("-k", type=int, default=5)

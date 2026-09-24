@@ -103,6 +103,7 @@ No `.env`:
 | `GRAPH_ENABLED` | `true`, `false` | Ativa a rota de perguntas sobre fundos |
 | `JUDGE_PROVIDER`, `JUDGE_MODEL` | provedor e modelo | LLM juiz da avaliação de respostas |
 | `LLM_PRICES` | JSON `{"modelo": [entrada, saída]}` | Preço em USD por milhão de tokens, para o custo por pergunta |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `PINECONE_API_KEY` | chaves | Exportadas do `.env` para os SDKs pelos CLIs e pela API ao construir o agente; uma variável já definida no ambiente tem precedência |
 
 Com Docker (API, Neo4j, Prometheus e Grafana):
 

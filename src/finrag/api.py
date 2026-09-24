@@ -19,9 +19,15 @@ def create_app(agent: FinRAGAgent | None = None) -> FastAPI:
 
     def get_agent() -> FinRAGAgent:
         if "agent" not in state:
-            from finrag.factory import build_agent
+            if agent is not None:
+                state["agent"] = agent
+            else:
+                # Só o caminho real carrega as chaves: testes injetam o agente e não passam aqui.
+                from finrag.config import load_api_keys
+                from finrag.factory import build_agent
 
-            state["agent"] = agent or build_agent()
+                load_api_keys()
+                state["agent"] = build_agent()
         return state["agent"]
 
     @app.get("/health")

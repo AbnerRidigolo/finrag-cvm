@@ -6,7 +6,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from finrag.config import get_settings
+from finrag.config import get_settings, load_api_keys
 from finrag.factory import build_agent, build_vector_store
 from finrag.ingestion.chunking import chunk_documents
 from finrag.ingestion.loaders import load_directory
@@ -64,6 +64,7 @@ def main() -> None:
     # Logs do finrag (ex.: seções descartadas na indexação) em INFO; bibliotecas só em WARNING.
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     logging.getLogger("finrag").setLevel(logging.INFO)
+    load_api_keys()
     parser = argparse.ArgumentParser(prog="finrag")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("index").add_argument("directory")

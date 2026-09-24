@@ -18,7 +18,7 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-from finrag.config import get_settings
+from finrag.config import get_settings, load_api_keys
 from finrag.factory import build_vector_store
 from finrag.llm import LLM, build_judge, strip_code_fence
 from finrag.schemas import Chunk
@@ -76,6 +76,7 @@ def build_dataset(llm: LLM, chunks: list[Chunk], n: int, min_chars: int = 200, s
 
 
 def main() -> None:
+    load_api_keys()
     parser = argparse.ArgumentParser()
     parser.add_argument("output")
     parser.add_argument("-n", type=int, default=50)
