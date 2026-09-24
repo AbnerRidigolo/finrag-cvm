@@ -22,7 +22,8 @@ from finrag.agent import FinRAGAgent
 from finrag.config import get_settings
 from finrag.eval.retrieval_eval import load_dataset
 from finrag.factory import build_agent
-from finrag.llm import LLM, build_judge
+from finrag.llm import LLM, build_judge, strip_code_fence
+from finrag.metrics import cost_usd
 from finrag.schemas import Answer
 
 JUDGE_SYSTEM = """Você avalia respostas de um assistente sobre fundos de investimento.
@@ -45,30 +46,52 @@ Escreva a justificativa antes das notas. Responda somente com JSON:
 {"justificativa": "...", "fidelidade": n, "relevancia": n}"""
 
 
-def judge_answer(judge: LLM, answer: Answer) -> dict:
+def judge_answer(judge: LLM, answer: Answer, prices: dict[str, list[float]] | None = None) -> dict:
+    """Notas do juiz para uma resposta, com os tokens e o custo da própria chamada ao juiz.
+
+    O custo é contado mesmo quando a saída é inválida, porque a chamada foi paga.
+    """
     prompt = (
         f"PERGUNTA:\n{answer.question}\n\n"
         f"CONTEXTO:\n{answer.context or '(vazio)'}\n\n"
         f"RESPOSTA:\n{answer.answer}"
     )
     completion = judge.complete(JUDGE_SYSTEM, prompt)
-    text = completion.text.strip().removeprefix("```json").removesuffix("```").strip()
+    usage = {
+        "judge_input_tokens": completion.input_tokens,
+        "judge_output_tokens": completion.output_tokens,
+        "custo_juiz_usd": cost_usd(
+            completion.model, completion.input_tokens, completion.output_tokens, prices or {}
+        )
+        or 0.0,
+    }
+    text = strip_code_fence(completion.text)
     try:
         parsed = json.loads(text)
-        return {
+        verdict = {
             "fidelidade": int(parsed["fidelidade"]),
             "relevancia": int(parsed["relevancia"]),
             "justificativa": str(parsed.get("justificativa", "")),
         }
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-        return {"fidelidade": None, "relevancia": None, "justificativa": f"inválido: {text[:200]}"}
+        verdict = {
+            "fidelidade": None,
+            "relevancia": None,
+            "justificativa": f"inválido: {text[:200]}",
+        }
+    return {**verdict, **usage}
 
 
-def run(agent: FinRAGAgent, judge: LLM, dataset: list[dict]) -> list[dict]:
+def run(
+    agent: FinRAGAgent,
+    judge: LLM,
+    dataset: list[dict],
+    prices: dict[str, list[float]] | None = None,
+) -> list[dict]:
     results = []
     for row in dataset:
         answer = agent.ask(row["question"])
-        verdict = judge_answer(judge, answer)
+        verdict = judge_answer(judge, answer, prices)
         results.append(
             {
                 "question": row["question"],
@@ -76,25 +99,38 @@ def run(agent: FinRAGAgent, judge: LLM, dataset: list[dict]) -> list[dict]:
                 "sources": [f"{s.source} {s.article}" for s in answer.sources],
                 **verdict,
                 "latency_ms": answer.usage.latency_ms,
-                "cost_usd": answer.usage.cost_usd,
+                "custo_agente_usd": answer.usage.cost_usd,
             }
         )
     return results
 
 
 def summarize(results: list[dict]) -> dict:
+    """Médias de qualidade e latência, e custo total da rodada separado entre agente e juiz.
+
+    O custo do agente é o que uma pergunta custa em produção; o do juiz é custo só da avaliação.
+    """
+    if not results:
+        return {"n": 0, "validas": 0}
+    custo_agente = sum(r["custo_agente_usd"] for r in results)
+    custo_juiz = sum(r["custo_juiz_usd"] for r in results)
+    costs = {
+        "custo_agente_usd": round(custo_agente, 6),
+        "custo_juiz_usd": round(custo_juiz, 6),
+        "custo_total_usd": round(custo_agente + custo_juiz, 6),
+        "custo_medio_agente_usd": round(custo_agente / len(results), 6),
+    }
     valid = [r for r in results if r["fidelidade"] is not None]
     if not valid:
-        return {"n": len(results), "validas": 0}
-    latencies = [r["latency_ms"] for r in results]
+        return {"n": len(results), "validas": 0, **costs}
     return {
         "n": len(results),
         "validas": len(valid),
         "fidelidade_media": statistics.mean(r["fidelidade"] for r in valid),
         "relevancia_media": statistics.mean(r["relevancia"] for r in valid),
         "pct_fieis": sum(r["fidelidade"] >= 4 for r in valid) / len(valid),
-        "latencia_media_ms": statistics.mean(latencies),
-        "custo_medio_usd": statistics.mean(r["cost_usd"] for r in results),
+        "latencia_media_ms": statistics.mean(r["latency_ms"] for r in results),
+        **costs,
     }
 
 
@@ -109,7 +145,11 @@ def main() -> None:
     dataset = load_dataset(args.dataset)
     if args.n:
         dataset = dataset[: args.n]
-    results = run(build_agent(s), build_judge(s), dataset)
+    judge_llm = build_judge(s)
+    for model in (s.llm_model, judge_llm.model):
+        if model not in s.llm_prices:
+            print(f"Aviso: {model} sem preço em LLM_PRICES; o custo dele sairá como zero.")
+    results = run(build_agent(s), judge_llm, dataset, s.llm_prices)
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:

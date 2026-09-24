@@ -20,7 +20,7 @@ from pathlib import Path
 
 from finrag.config import get_settings
 from finrag.factory import build_vector_store
-from finrag.llm import LLM, build_judge
+from finrag.llm import LLM, build_judge, strip_code_fence
 from finrag.schemas import Chunk
 
 GENERATOR_SYSTEM = """Você cria perguntas de avaliação para um sistema de busca sobre
@@ -53,7 +53,7 @@ def sample_chunks(chunks: list[Chunk], n: int, min_chars: int, seed: int) -> lis
 def generate_question(llm: LLM, chunk: Chunk) -> str | None:
     completion = llm.complete(GENERATOR_SYSTEM, f"Trecho ({chunk.context}):\n{chunk.text}")
     try:
-        question = json.loads(completion.text)["question"].strip()
+        question = json.loads(strip_code_fence(completion.text))["question"].strip()
     except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
         return None
     return None if not question or question.upper() == "SKIP" else question

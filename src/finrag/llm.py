@@ -4,10 +4,20 @@ Todo provedor devolve um `Completion` com o texto e os tokens consumidos, o que 
 medir custo por pergunta sem depender de callbacks específicos de cada SDK.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
 from finrag.config import Settings
+
+CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*(.*?)\s*```$", re.DOTALL)
+
+
+def strip_code_fence(text: str) -> str:
+    """Remove a cerca de código (```json ... ```) que alguns modelos colocam em volta do JSON."""
+    text = text.strip()
+    match = CODE_FENCE_RE.match(text)
+    return match.group(1) if match else text
 
 
 @dataclass(frozen=True)

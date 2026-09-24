@@ -21,7 +21,7 @@ from langgraph.graph import END, StateGraph
 
 from finrag import metrics
 from finrag.graph.store import QUERIES, GraphStore
-from finrag.llm import LLM, Completion
+from finrag.llm import LLM, Completion, strip_code_fence
 from finrag.retrieval.hybrid import HybridRetriever
 from finrag.schemas import Answer, RetrievedChunk, Source, Usage
 
@@ -104,7 +104,7 @@ class FinRAGAgent:
             completion = self.llm.complete(ROUTER_SYSTEM, state["question"])
             completions.append(completion)
             try:
-                parsed = json.loads(completion.text)
+                parsed = json.loads(strip_code_fence(completion.text))
                 if parsed.get("route") in {"normas", "fundos"}:
                     decision = {k: str(parsed.get(k, "")) for k in ("route", "intent", "entity")}
             except (json.JSONDecodeError, AttributeError):

@@ -53,6 +53,15 @@ def test_agente_usa_grafo_quando_roteado(retriever):
     assert "GESTORA ALFA CAPITAL" in llm.prompts[0]
 
 
+def test_roteador_aceita_json_com_cerca_de_codigo(retriever):
+    graph = FakeGraph()
+    llm = FakeLLM(
+        '```json\n{"route": "fundos", "intent": "fundos_do_gestor", "entity": "Alfa"}\n```'
+    )
+    answer = FinRAGAgent(llm, retriever, graph=graph).ask("Me fale da Alfa")
+    assert answer.route == "fundos" and graph.calls == [("fundos_do_gestor", "Alfa")]
+
+
 def test_sem_grafo_cai_para_documentos(retriever):
     llm = FakeLLM('{"route": "fundos", "intent": "fundos_do_gestor", "entity": "Alfa"}')
     assert FinRAGAgent(llm, retriever, graph=None).ask("Fundos da Alfa?").route == "normas"
