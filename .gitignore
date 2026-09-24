@@ -19,6 +19,9 @@ data/processed/
 *.parquet
 *.pdf
 
+# Prompts de chamadas ao juiz que falharam (diagnóstico local)
+data/eval/results/failed_requests/
+
 # SO / IDE
 .DS_Store
 __MACOSX/

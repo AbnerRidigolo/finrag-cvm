@@ -40,7 +40,9 @@ class Settings(BaseSettings):
 
     chunk_max_chars: int = 1200
     chunk_overlap_chars: int = 150
-    candidates_per_retriever: int = 20
+    # 10 e não 20: com re-ranking, 20 não mudou nenhum resultado no dataset real e quase
+    # dobrou a latência (ver "10 ou 20 candidatos por método" no README).
+    candidates_per_retriever: int = 10
     top_k: int = 5
 
     graph_enabled: bool = False

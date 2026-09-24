@@ -191,7 +191,7 @@ Diferença pareada (as mesmas perguntas reamostradas nos dois lados), IC de 95%:
 
 **Leitura.** O re-ranking melhorou o MRR (+0,10, IC 95% +0,01 a +0,19); no Hit@1 a melhora estimada é de +0,14, mas o intervalo encosta no zero (+0,00 a +0,26), então com 43 perguntas o tamanho do ganho é incerto. O custo é de latência: o p50 passou de 320 ms para 2.164 ms com o cross-encoder em CPU. **O híbrido não superou o denso** neste dataset: a diferença é de +0,02 no Hit@1, com IC de −0,09 a +0,16. Uma hipótese, não testada, é que as perguntas citam o fundo ou o tipo de fundo, que também está no cabeçalho indexado de cada trecho, e isso favorece igualmente o denso e o BM25, reduzindo o espaço para a fusão complementar os dois. Contra o BM25 sozinho, o híbrido tem vantagem pequena e no limite (MRR +0,07, IC +0,00 a +0,14).
 
-**10 ou 20 candidatos por método.** Com re-ranking, reduzir de 20 para 10 candidatos não mudou o resultado de nenhuma das 43 perguntas (diferença pareada de 0,00 nas três métricas) e baixou o p50 de 2.555 ms para 1.423 ms na mesma execução, porque o cross-encoder passa a ler em média 16,6 trechos em vez de 33,7. Sem re-ranking, 5 perguntas mudaram, com diferença dentro da margem (Hit@5 +0,05, IC +0,00 a +0,12). A avaliação de respostas abaixo usa 10 candidatos. A equivalência vale para este dataset; com perguntas mais difíceis, um trecho relevante fora dos 10 primeiros de cada método passaria a ser perdido.
+**10 ou 20 candidatos por método.** Com re-ranking, reduzir de 20 para 10 candidatos não mudou o resultado de nenhuma das 43 perguntas (diferença pareada de 0,00 nas três métricas) e baixou o p50 de 2.555 ms para 1.423 ms na mesma execução, porque o cross-encoder passa a ler em média 16,6 trechos em vez de 33,7. Sem re-ranking, 5 perguntas mudaram, com diferença dentro da margem (Hit@5 +0,05, IC +0,00 a +0,12). Por isso o padrão de `CANDIDATES_PER_RETRIEVER` passou de 20 para 10 (a tabela acima foi medida com 20), e a avaliação de respostas abaixo usa 10. A equivalência vale para este dataset; com perguntas mais difíceis, um trecho relevante fora dos 10 primeiros de cada método passaria a ser perdido.
 
 Ressalvas: perguntas sintéticas, uma única rodada, 43 perguntas, e a amostragem dá o mesmo peso a documentos de tamanhos muito diferentes.
 
@@ -256,6 +256,7 @@ monitoring/        Prometheus e dashboard do Grafana provisionado
 - [ ] Suporte ao `registro_fundo_classe.zip` (fundos adaptados à Resolução CVM 175) no grafo
 - [ ] Calibrar o juiz comparando suas notas com uma amostra avaliada à mão
 - [ ] Alerta no Prometheus para p95 de latência e custo por pergunta acima de um limite
+- [ ] Remover na normalização os 71 marcadores de lista U+F0B7 (fonte Symbol, área de uso privado) que a extração dos PDFs da Resolução 175 deixa no texto. Exige reindexar e muda os `chunk_id`, então o dataset precisa ser remapeado junto.
 
 ## Licença
 
