@@ -1,4 +1,4 @@
-.PHONY: install dev lint test index demo api eval up down graph-load download index-real dataset eval-real eval-answers
+.PHONY: install dev lint test index demo api eval up down graph-load download index-real dataset eval-real eval-answers judge-control
 
 install:
 	pip install -e ".[all]"
@@ -47,4 +47,7 @@ eval-real:
 	python -m finrag.eval.retrieval_eval data/eval/cvm_questions.jsonl --output data/eval/results/retrieval.md
 
 eval-answers:
-	python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30
+	python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30 --rejudge 10 --max-cost 0.35
+
+judge-control:
+	python -m finrag.eval.judge_control data/eval/results/answer_eval.jsonl --max-cost 0.12

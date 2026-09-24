@@ -34,7 +34,7 @@ def test_sem_mapa_nao_avisa(caplog):
 
 def test_mapa_versionado_tem_title_e_subject_em_todas_as_entradas(tmp_path):
     titles = load_doc_titles(ROOT / "data" / "doc_titles.json")
-    assert len(titles) == 16
+    assert len(titles) == 19  # 16 documentos reais e os 3 do corpus de exemplo
     assert all(v["title"].strip() and v["subject"].strip() for v in titles.values())
     assert load_doc_titles(tmp_path / "nao-existe.json") == {}
 

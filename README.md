@@ -13,7 +13,7 @@ Assistente de perguntas e respostas sobre o mercado de fundos brasileiro, constr
 ```mermaid
 flowchart LR
     subgraph Ingestão
-        D[PDFs e textos<br/>normas e regulamentos] --> C[Chunking por artigo<br/>+ título do documento]
+        D[PDFs e textos<br/>normas e regulamentos] --> C[Chunking por artigo<br/>+ título do mapa doc_titles.json]
         C --> E[Embeddings]
         E --> V[(ChromaDB ou Pinecone)]
         CSV[cad_fi.csv<br/>cadastro CVM] --> G[(Neo4j)]
@@ -36,7 +36,7 @@ flowchart LR
     API --> M["/metrics"] --> P[(Prometheus)] --> GF[Grafana]
 ```
 
-A busca híbrida consulta o ChromaDB (similaridade semântica) e um índice BM25 (termos exatos) em paralelo, funde os rankings com **Reciprocal Rank Fusion** e reordena os candidatos com um **cross-encoder** multilíngue antes de enviar o contexto ao LLM.
+A busca híbrida consulta o ChromaDB (similaridade semântica) e um índice BM25 (termos exatos), funde os rankings com **Reciprocal Rank Fusion** e reordena os candidatos com um **cross-encoder** multilíngue antes de enviar o contexto ao LLM.
 
 ## Rodando em 2 minutos (sem chave de API)
 
@@ -75,12 +75,16 @@ pytest --cov=finrag
 Saída do `make demo`:
 
 ```
-3 documentos -> 23 chunks indexados em 0.1s
+3 documentos -> 23 chunks indexados no chroma em 0.6s
 [rota: normas]
 
 Trecho mais relevante encontrado [1]:
 (regulamento_fundo_exemplo_alpha.txt, Art.4º)
 Art. 4º A taxa de administração é de 1,2% ao ano sobre o patrimônio líquido do fundo...
+
+[1] REGULAMENTO DO FUNDO EXEMPLO ALPHA FIDC Art.4º (score 0.0325)
+[2] REGULAMENTO DO FUNDO EXEMPLO ALPHA FIDC Art.1º (score 0.0315)
+...
 ```
 
 Toda resposta traz latência por etapa, tokens e custo estimado (no modo offline, zero).
@@ -88,7 +92,7 @@ Toda resposta traz latência por etapa, tokens e custo estimado (no modo offline
 ## Configuração completa
 
 ```bash
-pip install -e ".[all]"   # OpenAI, Anthropic, cross-encoder e driver Neo4j
+pip install -e ".[all]"   # OpenAI, Anthropic, cross-encoder, Pinecone e driver Neo4j
 ```
 
 No `.env`:
@@ -100,6 +104,8 @@ No `.env`:
 | `EMBEDDING_PROVIDER` | `openai`, `hashing` | Busca densa |
 | `RERANKER` | `cross-encoder`, `none` | Re-ranking dos candidatos |
 | `VECTOR_STORE` | `chroma`, `pinecone` | Banco vetorial (local ou gerenciado) |
+| `CANDIDATES_PER_RETRIEVER` | inteiro, padrão 10 | Candidatos por método antes da fusão; o re-ranking lê até o dobro |
+| `DOC_TITLES_PATH` | caminho, padrão `data/doc_titles.json` | Títulos e assuntos dos documentos |
 | `GRAPH_ENABLED` | `true`, `false` | Ativa a rota de perguntas sobre fundos |
 | `JUDGE_PROVIDER`, `JUDGE_MODEL` | provedor e modelo | LLM juiz da avaliação de respostas |
 | `LLM_PRICES` | JSON `{"modelo": [entrada, saída]}` | Preço em USD por milhão de tokens, para o custo por pergunta |
@@ -133,7 +139,7 @@ O repositório traz um **corpus de exemplo fictício** em `data/sample/`, usado 
    - **Suplementos excluídos.** O arquivo de Suplementos da Resolução 175 (lâminas, informes e formulários-modelo) gerava 179 trechos sem nenhum artigo, que não viram pergunta de avaliação mas competem na busca como ruído. Ele fica em `data/raw/excluded/`.
    - **O texto consolidado completo não é indexado**, só as partes, para não duplicar cada artigo.
    - **Redação revogada.** No PDF consolidado da CVM, a redação antiga aparece tachada logo antes da vigente, e o tachado se perde na extração de texto. Nos arquivos `resol*consolid*`, quando o mesmo artigo aparece em seções seguidas, o chunker mantém só a última (a vigente) e registra cada descarte no log da indexação. Na Resolução 175 foram 11 seções descartadas, todas conferidas à mão.
-2. **Configuração.** No `.env`, use embeddings e reranker reais: `EMBEDDING_PROVIDER=openai`, `RERANKER=cross-encoder`, um `LLM_PROVIDER` real e um `JUDGE_PROVIDER`.
+2. **Configuração.** No `.env`, use embeddings e reranker reais: `EMBEDDING_PROVIDER=openai`, `RERANKER=cross-encoder`, um `LLM_PROVIDER` real, um `JUDGE_PROVIDER` e os preços dos dois modelos em `LLM_PRICES`. Cada arquivo em `data/raw/docs/` precisa de uma entrada em `data/doc_titles.json`; os que faltarem geram aviso na indexação.
 3. **Indexação.** `python -m finrag.pipeline index data/raw/docs`
 4. **Dataset de avaliação.** `python -m finrag.eval.build_dataset data/eval/cvm_questions.jsonl -n 50` sorteia trechos e pede ao LLM uma pergunta que só aquele trecho responde. O trecho vira o gabarito. Detalhes:
    - **Amostragem igual por documento.** As perguntas são divididas igualmente entre os arquivos, então um anexo de 4 páginas tem o mesmo peso da Parte Geral, de 76. A escolha foi deliberada, para cobrir todos os tipos de fundo; o custo é que a métrica não reflete a proporção de cada documento no corpus.
@@ -154,23 +160,16 @@ O repositório traz um **corpus de exemplo fictício** em `data/sample/`, usado 
 
    Após a revisão ficaram **43 perguntas**: saíram as 2 que dependiam de contexto e as 4 cópias reais.
 5. **Recuperação.** `python -m finrag.eval.retrieval_eval data/eval/cvm_questions.jsonl --output data/eval/results/retrieval.md` compara denso, esparso, híbrido e híbrido + re-ranking, com latência p50 e p95.
-6. **Respostas.** `python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30` (detalhes abaixo).
+6. **Respostas.** `python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30 --rejudge 10 --max-cost 0.35` avalia 30 perguntas, julga de novo 10 respostas e para antes de passar de US$ 0,35 (detalhes abaixo). Grava a cada pergunta e, se interrompido, retoma de onde parou somando o gasto anterior ao teto.
+7. **Controle negativo do juiz.** `python -m finrag.eval.judge_control data/eval/results/answer_eval.jsonl --max-cost 0.12` julga versões deliberadamente erradas das respostas.
+
+Os mesmos passos estão no `Makefile`: `index-real`, `dataset`, `eval-real`, `eval-answers` e `judge-control`.
 
 Para o grafo de fundos, `python -m finrag.pipeline download-cadastro` baixa o `cad_fi.csv` do [Portal de Dados Abertos da CVM](https://dados.cvm.gov.br/dataset/fi-cad) e `python -m finrag.pipeline graph-load data/raw/cad_fi.csv` carrega no Neo4j. Atenção: esse arquivo cobre os fundos **não adaptados** à Resolução CVM 175; os adaptados estão em `registro_fundo_classe.zip`, ainda não suportado (ver próximos passos).
 
 ## Resultados
 
-Avaliação de recuperação em `data/eval/questions.jsonl` (10 perguntas com o artigo correto anotado), gerada por `make eval`:
-
-| Configuração | Hit@1 | Hit@5 | MRR@5 |
-| :-- | --: | --: | --: |
-| Denso | 0,70 | 1,00 | 0,82 |
-| Esparso (BM25) | 0,70 | 1,00 | 0,85 |
-| **Híbrido (RRF)** | **0,80** | 1,00 | **0,88** |
-
-Esses números usam o corpus fictício e embeddings por hashing, então medem o encanamento, não a qualidade semântica.
-
-### Documentos reais da CVM
+### Recuperação nos documentos reais da CVM
 
 Corpus: Resolução CVM 175 (Parte Geral e Anexos Normativos I a XII) e três regulamentos de FIDC, **16 documentos e 1.578 trechos** (ver [Dados reais da CVM](#dados-reais-da-cvm)). Dataset: **43 perguntas sintéticas** geradas pelo `gpt-6-sol` e revisadas à mão, uma ou mais por documento. Embeddings `text-embedding-3-small`, re-ranking com o cross-encoder `mmarco-mMiniLMv2-L12-H384-v1` rodando em CPU, 20 candidatos por método, k = 5. Entre colchetes, o IC de 95% por bootstrap (1.000 reamostragens das perguntas, semente fixa); a latência inclui a chamada de rede à API de embeddings.
 
@@ -202,7 +201,7 @@ A recuperação pode acertar e a resposta ainda alucinar. Por isso há uma segun
 - **Fidelidade (1 a 5):** toda afirmação está sustentada pelo contexto recuperado? Dizer "o contexto não informa" conta como fiel.
 - **Relevância (1 a 5):** a resposta atende ao que foi perguntado?
 
-O juiz recebe critérios com âncoras por nota, escreve a justificativa antes da nota e, no Claude, roda com thinking desativado. Os modelos atuais não aceitam `temperature=0` (o juiz não tem amostragem configurável), então as notas podem variar entre execuções. Use um modelo diferente do gerador (`JUDGE_PROVIDER`), para reduzir o viés de um modelo avaliar a si mesmo. O script imprime fidelidade e relevância médias, a fração de respostas fiéis, a latência média e o custo separado em `custo_agente_usd` (o que as perguntas custariam em produção), `custo_juiz_usd` (custo só da avaliação) e `custo_total_usd`, e lista os piores casos para revisão manual. O detalhe por pergunta fica em `data/eval/results/answer_eval.jsonl`.
+O juiz recebe critérios com âncoras por nota, escreve a justificativa antes da nota e, no Claude, roda com thinking desativado. Os modelos atuais não aceitam `temperature=0` (o juiz não tem amostragem configurável), então as notas podem variar entre execuções. Use um modelo diferente do gerador (`JUDGE_PROVIDER` e `JUDGE_MODEL`), para reduzir o viés de um modelo avaliar a si mesmo. O script imprime fidelidade e relevância médias, a fração de respostas fiéis, a latência média e o custo separado em `custo_agente_usd` (o que as perguntas custariam em produção), `custo_juiz_usd` (custo só da avaliação) e `custo_total_usd`, a concordância do rejulgamento (`--rejudge`), se a rodada foi interrompida (por custo ou por 3 falhas seguidas do juiz) e os piores casos para revisão manual. Um 400 genérico da API ganha uma nova tentativa; o prompt de cada chamada que falha fica em `data/eval/results/failed_requests/`, fora do git. O detalhe por pergunta fica em `data/eval/results/answer_eval.jsonl`.
 
 **Gerador e juiz são do mesmo provedor, com modelos diferentes.** Nos resultados publicados, as respostas vêm do `gpt-6-luna` e o juiz é o `gpt-6-sol`, mais forte, ambos da OpenAI. O ideal seria um juiz de outro provedor, porque modelos da mesma família tendem a compartilhar vieses e podem avaliar com mais boa vontade respostas no próprio estilo. O código já suporta isso: basta definir `JUDGE_PROVIDER=anthropic` e `JUDGE_MODEL` no `.env`, sem mudar nada no código.
 
@@ -236,6 +235,18 @@ Custo: US$ 0,105. O juiz reconheceu todos os erros, e separou bem os dois crité
 
 **Fidelidade não é correção.** Na pergunta "Nos fundos de investimento em geral, é possível realizar uma assembleia sem convocação prévia se todos os cotistas comparecerem?", a regra está na Parte Geral da Resolução 175, mas a busca trouxe trechos dos regulamentos de FIDC, e é esse o único caso em que o gabarito não foi recuperado. A resposta se apoiou nesses regulamentos e ainda ressalvou que o contexto não permitia estender a regra a todos os fundos. O juiz deu nota 5, e pela rubrica está certo: tudo o que a resposta afirma está no contexto que ela recebeu. O erro foi da recuperação, e a fidelidade, por construção, não o enxerga. Por isso a taxa de recuperação do gabarito (29 de 30) deve ser lida junto com a fidelidade.
 
+### Corpus de exemplo (teste do encanamento)
+
+`make eval` roda a avaliação de recuperação no corpus fictício de `data/sample/` (10 perguntas com o artigo correto anotado), com embeddings por hashing e sem re-ranking. Serve para verificar que o pipeline funciona sem chave de API, não para medir qualidade semântica:
+
+| Configuração | Hit@1 | Hit@5 | MRR@5 |
+| :-- | --: | --: | --: |
+| Denso | 0,70 [0,50–1,00] | 1,00 [1,00–1,00] | 0,82 [0,66–1,00] |
+| Esparso (BM25) | 0,70 [0,40–0,90] | 1,00 [1,00–1,00] | 0,85 [0,70–0,95] |
+| Híbrido (RRF) | 0,80 [0,60–1,00] | 1,00 [1,00–1,00] | 0,88 [0,72–1,00] |
+
+Com 10 perguntas, os intervalos se sobrepõem quase por inteiro, e nenhuma configuração se destaca.
+
 ## Decisões técnicas
 
 **Chunking por artigo.** Textos normativos são organizados em artigos, e cortar um artigo ao meio separa a regra das exceções. O chunker divide por artigo e só quebra artigos que passam do limite, preferindo fim de frase e mantendo sobreposição.
@@ -262,16 +273,19 @@ Custo: US$ 0,105. O juiz reconheceu todos os erros, e separou bem os dois crité
 
 ```
 src/finrag/
-├── ingestion/     loaders (PDF, texto) e chunking por artigo
+├── ingestion/     loaders (PDF, texto), mapa de títulos e chunking por artigo
 ├── retrieval/     embeddings, Chroma, Pinecone, BM25, RRF, re-ranking, retriever híbrido
 ├── graph/         leitura do cadastro CVM e grafo Neo4j
-├── eval/          geração de dataset, avaliação de recuperação e LLM como juiz
+├── eval/          geração de dataset, recuperação com IC, LLM como juiz e controle negativo
 ├── agent.py       agente LangGraph (roteia, recupera, responde, mede)
 ├── llm.py         provedores OpenAI, Anthropic e modo offline, com contagem de tokens
 ├── metrics.py     métricas Prometheus e custo por pergunta
 ├── api.py         FastAPI
 └── pipeline.py    CLI: index, ask, download-cadastro, graph-load
 monitoring/        Prometheus e dashboard do Grafana provisionado
+data/doc_titles.json          título e assunto de cada documento
+data/eval/cvm_questions.jsonl dataset revisado (43 perguntas) e excluded_chunks.txt
+data/eval/results/            resultados publicados das avaliações
 ```
 
 ## Próximos passos

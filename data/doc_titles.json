@@ -62,5 +62,17 @@
   "resol175consolid_Anexo12.pdf": {
     "title": "Resolução CVM nº 175 – Anexo Normativo XII – Fundos de Investimento em Direitos Creditórios do Programa de Incentivo à Implementação de Projetos de Interesse Social",
     "subject": "FIDC-PIPS"
+  },
+  "glossario_fundos.txt": {
+    "title": "GLOSSÁRIO DE FUNDOS DE INVESTIMENTO",
+    "subject": "fundos de investimento em geral"
+  },
+  "regulamento_fundo_exemplo_alpha.txt": {
+    "title": "REGULAMENTO DO FUNDO EXEMPLO ALPHA FIDC",
+    "subject": "Fundo Exemplo Alpha FIDC"
+  },
+  "regulamento_fundo_exemplo_beta.txt": {
+    "title": "REGULAMENTO DO FUNDO EXEMPLO BETA FIP",
+    "subject": "Fundo Exemplo Beta FIP"
   }
 }
