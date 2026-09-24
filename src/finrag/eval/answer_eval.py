@@ -6,8 +6,10 @@ Para cada pergunta do dataset, o agente responde e um segundo LLM (o juiz) avali
 - Relevância (1-5): a resposta atende ao que foi perguntado?
 
 Boas práticas aplicadas: o juiz recebe critérios explícitos com âncoras por nota, justifica
-antes de dar a nota, roda com temperatura zero e, de preferência, é um modelo diferente do
-que gerou as respostas (JUDGE_PROVIDER / JUDGE_MODEL), para reduzir viés de autoavaliação.
+antes de dar a nota, roda com thinking desativado no Claude (os modelos atuais não aceitam
+temperature=0, então as notas podem variar entre execuções) e, de preferência, é um modelo
+diferente do que gerou as respostas (JUDGE_PROVIDER / JUDGE_MODEL), para reduzir viés de
+autoavaliação.
 
 Uso:
     python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30

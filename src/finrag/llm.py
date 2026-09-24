@@ -4,11 +4,14 @@ Todo provedor devolve um `Completion` com o texto e os tokens consumidos, o que 
 medir custo por pergunta sem depender de callbacks específicos de cada SDK.
 """
 
+import logging
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from finrag.config import Settings
+
+logger = logging.getLogger(__name__)
 
 CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*(.*?)\s*```$", re.DOTALL)
 
@@ -36,24 +39,33 @@ class LLM(Protocol):
     def complete(self, system: str, prompt: str) -> Completion: ...
 
 
+# Nenhum dos provedores aceita mais temperature=0 nos modelos atuais (gpt-6-luna só aceita o
+# valor padrão; claude-sonnet-5 removeu os parâmetros de amostragem). As respostas, e as notas
+# do juiz, podem variar entre execuções.
+
+
 class OpenAILLM:
     name = "openai"
 
-    def __init__(self, model: str) -> None:
-        from openai import OpenAI
+    def __init__(self, model: str, client: Any = None) -> None:
+        if client is None:
+            from openai import OpenAI
 
-        self.client = OpenAI()
+            client = OpenAI()
+        self.client = client
         self.model = model
 
     def complete(self, system: str, prompt: str) -> Completion:
         response = self.client.chat.completions.create(
             model=self.model,
-            temperature=0,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         )
         usage = response.usage
+        message = response.choices[0].message
+        if getattr(message, "refusal", None):
+            logger.warning("Recusa do modelo %s: %s", self.model, message.refusal)
         return Completion(
-            text=response.choices[0].message.content or "",
+            text=message.content or "",
             provider=self.name,
             model=self.model,
             input_tokens=usage.prompt_tokens if usage else 0,
@@ -64,20 +76,32 @@ class OpenAILLM:
 class AnthropicLLM:
     name = "anthropic"
 
-    def __init__(self, model: str) -> None:
-        import anthropic
+    def __init__(self, model: str, client: Any = None) -> None:
+        if client is None:
+            import anthropic
 
-        self.client = anthropic.Anthropic()
+            client = anthropic.Anthropic()
+        self.client = client
         self.model = model
 
     def complete(self, system: str, prompt: str) -> Completion:
+        # Thinking desativado: as tarefas aqui (roteamento, perguntas, notas do juiz) devolvem
+        # JSON curto, o max_tokens pequeno basta e o custo por chamada fica previsível.
         response = self.client.messages.create(
             model=self.model,
             max_tokens=1024,
-            temperature=0,
+            thinking={"type": "disabled"},
             system=system,
             messages=[{"role": "user", "content": prompt}],
         )
+        if response.stop_reason == "refusal":
+            # Volta com HTTP 200 e sem texto; quem chama trata o texto vazio como inválido.
+            details = getattr(response, "stop_details", None)
+            logger.warning(
+                "Recusa do modelo %s (categoria: %s)",
+                self.model,
+                getattr(details, "category", None),
+            )
         return Completion(
             text="".join(block.text for block in response.content if block.type == "text"),
             provider=self.name,

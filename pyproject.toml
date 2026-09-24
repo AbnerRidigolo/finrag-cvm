@@ -24,11 +24,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-openai = ["openai>=1.30"]
-anthropic = ["anthropic>=0.30"]
+openai = ["openai>=3.19.2"]
+anthropic = ["anthropic>=1.8.0"]
 rerank = ["sentence-transformers>=3.0"]
 graph = ["neo4j>=5.20"]
-pinecone = ["pinecone>=5.0"]
+pinecone = ["pinecone>=10.0.0"]
 all = ["finrag-cvm[openai,anthropic,rerank,graph,pinecone]"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5"]
 
