@@ -1,3 +1,4 @@
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -53,23 +54,20 @@ def test_fluxo_da_pagina_com_agente_offline(client):
 
 def test_wheel_inclui_a_pagina(tmp_path):
     """No Docker o pacote é instalado sem o modo editável: o index.html precisa ir junto."""
-    pytest.importorskip("setuptools")
+    # Copia o projeto para não deixar build/ e *.egg-info no repositório.
     for name in ("pyproject.toml", "README.md", "LICENSE"):
         shutil.copy(ROOT / name, tmp_path / name)
     shutil.copytree(
         ROOT / "src", tmp_path / "src", ignore=shutil.ignore_patterns("__pycache__", "*.egg-info")
     )
     dist = tmp_path / "dist"
-    subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            f"from setuptools import build_meta; build_meta.build_wheel({str(dist)!r})",
-        ],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-    )
+    if importlib.util.find_spec("setuptools"):
+        # Sem rede: usa o setuptools já instalado.
+        cmd = ["-c", f"from setuptools import build_meta; build_meta.build_wheel({str(dist)!r})"]
+    else:
+        # No CI o Python 3.12 não traz setuptools; o pip o baixa num ambiente isolado.
+        cmd = ["-m", "pip", "wheel", "--no-deps", "-q", "-w", str(dist), "."]
+    subprocess.run([sys.executable, *cmd], cwd=tmp_path, check=True, capture_output=True)
     (wheel,) = dist.glob("*.whl")
     with zipfile.ZipFile(wheel) as zf:
         assert "finrag/static/index.html" in zf.namelist()
