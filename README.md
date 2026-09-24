@@ -135,7 +135,24 @@ O repositório traz um **corpus de exemplo fictício** em `data/sample/`, usado 
    - **Redação revogada.** No PDF consolidado da CVM, a redação antiga aparece tachada logo antes da vigente, e o tachado se perde na extração de texto. Nos arquivos `resol*consolid*`, quando o mesmo artigo aparece em seções seguidas, o chunker mantém só a última (a vigente) e registra cada descarte no log da indexação. Na Resolução 175 foram 11 seções descartadas, todas conferidas à mão.
 2. **Configuração.** No `.env`, use embeddings e reranker reais: `EMBEDDING_PROVIDER=openai`, `RERANKER=cross-encoder`, um `LLM_PROVIDER` real e um `JUDGE_PROVIDER`.
 3. **Indexação.** `python -m finrag.pipeline index data/raw/docs`
-4. **Dataset de avaliação.** `python -m finrag.eval.build_dataset data/eval/cvm_questions.jsonl -n 50` sorteia trechos de forma estratificada por documento e pede ao LLM uma pergunta que só aquele trecho responde. O trecho vira o gabarito. Revise uma amostra à mão: perguntas sintéticas tendem a repetir palavras do texto, o que favorece o BM25.
+4. **Dataset de avaliação.** `python -m finrag.eval.build_dataset data/eval/cvm_questions.jsonl -n 50` sorteia trechos e pede ao LLM uma pergunta que só aquele trecho responde. O trecho vira o gabarito. Detalhes:
+   - **Amostragem igual por documento.** As perguntas são divididas igualmente entre os arquivos, então um anexo de 4 páginas tem o mesmo peso da Parte Geral, de 76. A escolha foi deliberada, para cobrir todos os tipos de fundo; o custo é que a métrica não reflete a proporção de cada documento no corpus.
+   - **Perguntas citam o assunto.** O gerador recebe o `subject` do documento (por exemplo "Croma FIDC" ou "FII", em `data/doc_titles.json`) e deve citá-lo, como faria um usuário real, que pergunta "qual a taxa do Croma FIDC?" e não "qual a taxa do fundo?". Isso facilita a busca, porque o título do documento também está no cabeçalho indexado de cada trecho; é uma condição favorável, e a métrica deve ser lida sabendo disso.
+   - **Cópia marcada automaticamente.** Perguntas que repetem 6 ou mais palavras seguidas do trecho (ignorando maiúsculas e acentos) recebem `"copied": true` e vão para o log. O filtro também pega terminologia sem paráfrase natural ("ações preferenciais sem direito a voto"), então a decisão final é da revisão manual.
+   - **Revisão manual e lista de exclusão.** Perguntas ruins são removidas do arquivo e o trecho vai para `data/eval/excluded_chunks.txt`, com o motivo, para não ser regerado.
+   - **Grava a cada pergunta.** Uma falha no meio (saldo, rede) não perde o que já foi pago; rodar de novo retoma de onde parou.
+
+   Efeito do prompt revisado, contado nas 49 perguntas de cada versão (a primeira versão pedia só paráfrase e não recebia o assunto):
+
+   | Problema | Prompt inicial | Prompt revisado |
+   | :-- | --: | --: |
+   | Não diz o fundo ou o tipo de fundo | 18 | 0 |
+   | Cita a estrutura do documento (anexo, artigo, inciso) | 3 | 0 |
+   | Depende de outro contexto | 8 | 2 |
+   | Nome de fundo ou pessoa ausente do trecho | não verificado | 0 |
+   | Marcada como copiada (6+ palavras seguidas) | não medido | 10 (4 cópias reais, 6 terminologia) |
+
+   Após a revisão ficaram **43 perguntas**: saíram as 2 que dependiam de contexto e as 4 cópias reais.
 5. **Recuperação.** `python -m finrag.eval.retrieval_eval data/eval/cvm_questions.jsonl --output data/eval/results/retrieval.md` compara denso, esparso, híbrido e híbrido + re-ranking, com latência p50 e p95.
 6. **Respostas.** `python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30` (detalhes abaixo).
 
@@ -164,6 +181,8 @@ A recuperação pode acertar e a resposta ainda alucinar. Por isso há uma segun
 
 O juiz recebe critérios com âncoras por nota, escreve a justificativa antes da nota e, no Claude, roda com thinking desativado. Os modelos atuais não aceitam `temperature=0` (o juiz não tem amostragem configurável), então as notas podem variar entre execuções. Use um modelo diferente do gerador (`JUDGE_PROVIDER`), para reduzir o viés de um modelo avaliar a si mesmo. O script imprime fidelidade e relevância médias, a fração de respostas fiéis, a latência média e o custo separado em `custo_agente_usd` (o que as perguntas custariam em produção), `custo_juiz_usd` (custo só da avaliação) e `custo_total_usd`, e lista os piores casos para revisão manual. O detalhe por pergunta fica em `data/eval/results/answer_eval.jsonl`.
 
+**Gerador e juiz são do mesmo provedor, com modelos diferentes.** Nos resultados publicados, as respostas vêm do `gpt-6-luna` e o juiz é o `gpt-6-sol`, mais forte, ambos da OpenAI. O ideal seria um juiz de outro provedor, porque modelos da mesma família tendem a compartilhar vieses e podem avaliar com mais boa vontade respostas no próprio estilo. O código já suporta isso: basta definir `JUDGE_PROVIDER=anthropic` e `JUDGE_MODEL` no `.env`, sem mudar nada no código.
+
 **O mesmo modelo gera as perguntas e julga as respostas.** O `build_dataset` usa o modelo do juiz para escrever as perguntas sintéticas. Isso é aceitável aqui porque as duas tarefas não se contaminam: o juiz não avalia a pergunta, e sim se a resposta *de outro modelo* está sustentada pelo contexto recuperado, comparando dois textos que ele recebe no prompt. O viés que importa evitar é o do gerador corrigir a si mesmo, e esse continua evitado. O risco que sobra é o modelo escrever perguntas no próprio estilo e depois achar mais "relevantes" as respostas que combinam com ele. Por isso as perguntas são revisadas à mão antes da avaliação, e a relevância deve ser lida com mais cautela que a fidelidade.
 
 ## Decisões técnicas
@@ -171,6 +190,8 @@ O juiz recebe critérios com âncoras por nota, escreve a justificativa antes da
 **Chunking por artigo.** Textos normativos são organizados em artigos, e cortar um artigo ao meio separa a regra das exceções. O chunker divide por artigo e só quebra artigos que passam do limite, preferindo fim de frase e mantendo sobreposição.
 
 **Título do documento no texto indexado.** O primeiro teste de recuperação falhou: o Art. 4º ("A taxa de administração é de 1,2%...") não menciona o nome do fundo, então perdia para artigos que só citavam o nome. Cada trecho passou a ser indexado com o título do documento e o número do artigo como cabeçalho (*contextual chunk headers*), mantendo o texto original para exibição.
+
+**Títulos por mapa explícito, não pela primeira linha.** A primeira versão usava a primeira linha do arquivo como título. No corpus fictício, em que cada arquivo começa pelo nome do fundo, funcionava. Nos PDFs reais, a primeira linha era timbre ou número de página: todos os 13 arquivos da Resolução 175 viravam "COMISSÃO DE VALORES MOBILIÁRIOS", e os regulamentos, "REGULAMENTO DO", "REGULAMENTO" e "1". O cabeçalho indexado não distinguia um anexo de outro, e o gerador de perguntas não tinha de onde tirar o nome do fundo, que aparece no texto de só 2% a 4% dos trechos dos regulamentos. Os títulos passaram a vir de `data/doc_titles.json`, com dois campos por arquivo: `title` (completo, extraído do cabeçalho do documento, vai no texto indexado e nas fontes) e `subject` (curto, é o que a pergunta sintética cita). Um arquivo indexado fora do mapa gera aviso no log e cai no comportamento antigo. A lição: heurística validada só no corpus de exemplo não diz nada sobre o corpus real.
 
 **Busca híbrida com RRF.** Embeddings capturam paráfrases ("quanto custa o fundo" e "taxa de administração"), mas diluem termos exatos como "Art. 6º", "FIDC" ou um CNPJ, que o BM25 acerta. O RRF combina os rankings pela posição, sem precisar calibrar escalas de score diferentes.
 

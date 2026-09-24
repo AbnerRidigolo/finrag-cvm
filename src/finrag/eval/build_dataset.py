@@ -147,11 +147,12 @@ def existing_chunk_ids(path: Path) -> set[str]:
 
 def excluded_chunk_ids(path: Path) -> set[str]:
     """Chunks cujas perguntas foram removidas na revisão manual: um chunk_id por linha,
-    linhas vazias e comentários (#) ignorados. Sem isso, rodar de novo recriaria a pergunta."""
+    opcionalmente seguido do motivo em comentário ("id  # motivo"); linhas vazias e
+    comentários são ignorados. Sem isso, rodar de novo recriaria a pergunta removida."""
     if not path.exists():
         return set()
     with open(path, encoding="utf-8") as f:
-        return {s for line in f if (s := line.strip()) and not s.startswith("#")}
+        return {s for line in f if (s := line.split("#", 1)[0].strip())}
 
 
 class UsageMeter:

@@ -132,7 +132,10 @@ def test_chunks_excluidos_na_revisao_nao_sao_regerados(chunks, tmp_path):
     output = tmp_path / "perguntas.jsonl"
     primeira = sample_chunks(chunks, n=3, min_chars=50, seed=1)[0]
     lista = tmp_path / "excluidos.txt"
-    lista.write_text(f"# removidos na revisão\n\n{primeira.id}\n", encoding="utf-8")
+    # O motivo fica ao lado do id, como em data/eval/excluded_chunks.txt.
+    lista.write_text(
+        f"# removidos na revisão\n\n{primeira.id}  # pergunta copiou o trecho\n", encoding="utf-8"
+    )
 
     excluded = excluded_chunk_ids(lista)
     llm = UsageMeter(ScriptedLLM(['{"question": "P2?"}', '{"question": "P3?"}'], tokens=(10, 2)))
