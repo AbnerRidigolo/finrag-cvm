@@ -208,6 +208,34 @@ O juiz recebe critérios com âncoras por nota, escreve a justificativa antes da
 
 **O mesmo modelo gera as perguntas e julga as respostas.** O `build_dataset` usa o modelo do juiz para escrever as perguntas sintéticas. Isso é aceitável aqui porque as duas tarefas não se contaminam: o juiz não avalia a pergunta, e sim se a resposta *de outro modelo* está sustentada pelo contexto recuperado, comparando dois textos que ele recebe no prompt. O viés que importa evitar é o do gerador corrigir a si mesmo, e esse continua evitado. O risco que sobra é o modelo escrever perguntas no próprio estilo e depois achar mais "relevantes" as respostas que combinam com ele. Por isso as perguntas são revisadas à mão antes da avaliação, e a relevância deve ser lida com mais cautela que a fidelidade.
 
+#### Resultados nos documentos reais
+
+As 30 primeiras perguntas do dataset (de 43, limite escolhido por custo), com o agente completo: roteador e resposta pelo `gpt-6-luna`, busca híbrida com 10 candidatos por método e re-ranking, 5 trechos no contexto. Juiz: `gpt-6-sol`. Detalhe por pergunta, com o contexto que o juiz leu, em `data/eval/results/answer_eval.jsonl`.
+
+| Métrica | Resultado |
+| :-- | :-- |
+| Fidelidade média | 5,00 (nota 5 nas 30 respostas) |
+| Relevância média | 4,93 (29 com nota 5, 1 com nota 3) |
+| Trecho do gabarito entre as 5 fontes recuperadas | 29 de 30 |
+| Rejulgamento de 10 respostas | mesma nota nas 10, em fidelidade e em relevância |
+| Custo do agente por pergunta | US$ 0,00025 |
+| Latência do agente | p50 de 5,2 s (máximo de 8,2 s) |
+| Custo da avaliação | US$ 0,178, quase todo do juiz (US$ 0,128 + US$ 0,042 do rejulgamento) |
+
+**Ressalva: as notas estão no teto.** Com nota 5 em todas as respostas, a fidelidade não discrimina nada nesta amostra, e a concordância do rejulgamento também diz pouco: repetir 5 onde tudo é 5 não mostra consistência em casos difíceis. Duas explicações são compatíveis com esse resultado, perguntas fáceis (sintéticas, citando o assunto, com o gabarito recuperado em 29 de 30) ou um juiz leniente. O controle negativo abaixo testa a segunda.
+
+**Controle negativo do juiz.** Respostas reais da amostra do rejulgamento foram alteradas de forma determinística, sem LLM, mantendo a pergunta e o contexto (`python -m finrag.eval.judge_control`). Um juiz útil precisa dar nota baixa a elas.
+
+| Perturbação | Respostas | Notas de fidelidade | Notas de relevância | Critério de detecção | Detectadas |
+| :-- | --: | :-- | :-- | :-- | --: |
+| Números e prazos dobrados (só respostas com número) | 3 | 1 (×3) | 5 (×3) | fidelidade ≤ 3 | 3 de 3 |
+| Resposta de outra pergunta | 10 | 1 (×10) | 1 (×10) | relevância ≤ 3 | 10 de 10 |
+| Frase plausível inventada, ausente do contexto | 10 | 3 (×9), 1 (×1) | 5 (×10) | fidelidade ≤ 3 | 10 de 10 |
+
+Custo: US$ 0,105. O juiz reconheceu todos os erros, e separou bem os dois critérios: resposta trocada derrubou a relevância, números alterados e frase inventada derrubaram só a fidelidade. Mas a frase inventada foi detectada **no limite**: 9 das 10 respostas receberam nota 3, que é a âncora da rubrica para "mistura afirmações sustentadas com uma não sustentada". Com um critério mais rígido (fidelidade ≤ 2), a detecção cairia para 1 de 10. Na prática, uma afirmação sem apoio no meio de uma resposta correta tira a resposta do grupo "fiel" (nota ≥ 4), mas não a leva ao fundo da escala. A perturbação de números teve só 3 casos, porque 7 das 10 respostas da amostra não tinham números; é pouco para concluir sobre ela.
+
+**Fidelidade não é correção.** Na pergunta "Nos fundos de investimento em geral, é possível realizar uma assembleia sem convocação prévia se todos os cotistas comparecerem?", a regra está na Parte Geral da Resolução 175, mas a busca trouxe trechos dos regulamentos de FIDC, e é esse o único caso em que o gabarito não foi recuperado. A resposta se apoiou nesses regulamentos e ainda ressalvou que o contexto não permitia estender a regra a todos os fundos. O juiz deu nota 5, e pela rubrica está certo: tudo o que a resposta afirma está no contexto que ela recebeu. O erro foi da recuperação, e a fidelidade, por construção, não o enxerga. Por isso a taxa de recuperação do gabarito (29 de 30) deve ser lida junto com a fidelidade.
+
 ## Decisões técnicas
 
 **Chunking por artigo.** Textos normativos são organizados em artigos, e cortar um artigo ao meio separa a regra das exceções. O chunker divide por artigo e só quebra artigos que passam do limite, preferindo fim de frase e mantendo sobreposição.
@@ -248,13 +276,14 @@ monitoring/        Prometheus e dashboard do Grafana provisionado
 
 ## Próximos passos
 
-- [x] Avaliação sobre documentos reais com re-ranking (ferramental pronto; falta publicar os números)
+- [x] Avaliação sobre documentos reais com re-ranking
 - [x] Avaliação da qualidade das respostas com LLM como juiz
 - [x] Adaptador para Pinecone como alternativa ao Chroma
 - [x] Métricas de latência e custo por pergunta no Prometheus, com dashboard no Grafana
-- [ ] Publicar os resultados sobre documentos reais da CVM
+- [x] Publicar os resultados sobre documentos reais da CVM
 - [ ] Suporte ao `registro_fundo_classe.zip` (fundos adaptados à Resolução CVM 175) no grafo
-- [ ] Calibrar o juiz comparando suas notas com uma amostra avaliada à mão
+- [ ] Calibrar o juiz comparando suas notas com uma amostra avaliada à mão (o controle negativo testa só erros introduzidos de propósito)
+- [ ] Avaliar com perguntas mais difíceis ou reais, que tirem a fidelidade do teto
 - [ ] Alerta no Prometheus para p95 de latência e custo por pergunta acima de um limite
 - [ ] Remover na normalização os 71 marcadores de lista U+F0B7 (fonte Symbol, área de uso privado) que a extração dos PDFs da Resolução 175 deixa no texto. Exige reindexar e muda os `chunk_id`, então o dataset precisa ser remapeado junto.
 
