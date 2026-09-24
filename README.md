@@ -126,6 +126,12 @@ curl -X POST localhost:8000/ask -H "Content-Type: application/json" \
 O repositório traz um **corpus de exemplo fictício** em `data/sample/`, usado nos testes e no CI. Para avaliar com dados reais:
 
 1. **Documentos.** Baixe normas (por exemplo, a Resolução CVM 175 e seus anexos) na área de Legislação do site da CVM e regulamentos de fundos na consulta pública de fundos. Coloque os PDFs em `data/raw/docs/`, que está no `.gitignore`.
+
+   O corpus usado nos resultados abaixo tem a Resolução CVM 175 consolidada, baixada por parte (Parte Geral e Anexos Normativos I a XII), e três regulamentos de FIDC já adaptados a ela, obtidos na consulta de fundos da CVM. Escolhas e limitações:
+   - **Sem regulamento de FIP.** Não foi possível obter um regulamento de FIP adaptado à Resolução 175 em domínio da CVM; o tema está coberto só pelo Anexo Normativo IV. Regulamentos antigos (ICVM 578) foram descartados porque trariam regras revogadas.
+   - **Suplementos excluídos.** O arquivo de Suplementos da Resolução 175 (lâminas, informes e formulários-modelo) gerava 179 trechos sem nenhum artigo, que não viram pergunta de avaliação mas competem na busca como ruído. Ele fica em `data/raw/excluded/`.
+   - **O texto consolidado completo não é indexado**, só as partes, para não duplicar cada artigo.
+   - **Redação revogada.** No PDF consolidado da CVM, a redação antiga aparece tachada logo antes da vigente, e o tachado se perde na extração de texto. Nos arquivos `resol*consolid*`, quando o mesmo artigo aparece em seções seguidas, o chunker mantém só a última (a vigente) e registra cada descarte no log da indexação. Na Resolução 175 foram 11 seções descartadas, todas conferidas à mão.
 2. **Configuração.** No `.env`, use embeddings e reranker reais: `EMBEDDING_PROVIDER=openai`, `RERANKER=cross-encoder`, um `LLM_PROVIDER` real e um `JUDGE_PROVIDER`.
 3. **Indexação.** `python -m finrag.pipeline index data/raw/docs`
 4. **Dataset de avaliação.** `python -m finrag.eval.build_dataset data/eval/cvm_questions.jsonl -n 50` sorteia trechos de forma estratificada por documento e pede ao LLM uma pergunta que só aquele trecho responde. O trecho vira o gabarito. Revise uma amostra à mão: perguntas sintéticas tendem a repetir palavras do texto, o que favorece o BM25.

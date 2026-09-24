@@ -1,6 +1,7 @@
 """CLI: baixar dados, indexar documentos, fazer perguntas e carregar o grafo de fundos."""
 
 import argparse
+import logging
 import time
 import urllib.request
 from pathlib import Path
@@ -60,6 +61,9 @@ def cmd_graph_load(csv_path: str) -> None:
 
 
 def main() -> None:
+    # Logs do finrag (ex.: seções descartadas na indexação) em INFO; bibliotecas só em WARNING.
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    logging.getLogger("finrag").setLevel(logging.INFO)
     parser = argparse.ArgumentParser(prog="finrag")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("index").add_argument("directory")
