@@ -21,8 +21,11 @@ from pathlib import Path
 
 from finrag.config import get_settings, load_api_keys
 from finrag.factory import build_vector_store
-from finrag.llm import LLM, build_judge, strip_code_fence
+from finrag.llm import LLM, Completion, build_judge, strip_code_fence
+from finrag.metrics import cost_usd
 from finrag.schemas import Chunk
+
+EXCLUDED_CHUNKS = Path("data/eval/excluded_chunks.txt")
 
 GENERATOR_SYSTEM = """Você cria perguntas de avaliação para um sistema de busca sobre
 normas e regulamentos de fundos de investimento brasileiros.
@@ -96,6 +99,31 @@ def existing_chunk_ids(path: Path) -> set[str]:
         return {json.loads(line)["chunk_id"] for line in f if line.strip()}
 
 
+def excluded_chunk_ids(path: Path) -> set[str]:
+    """Chunks cujas perguntas foram removidas na revisão manual: um chunk_id por linha,
+    linhas vazias e comentários (#) ignorados. Sem isso, rodar de novo recriaria a pergunta."""
+    if not path.exists():
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {s for line in f if (s := line.strip()) and not s.startswith("#")}
+
+
+class UsageMeter:
+    """Envolve um LLM e soma os tokens de todas as chamadas, para informar o custo real."""
+
+    def __init__(self, llm: LLM) -> None:
+        self.llm = llm
+        self.name, self.model = llm.name, llm.model
+        self.calls = self.input_tokens = self.output_tokens = 0
+
+    def complete(self, system: str, prompt: str) -> Completion:
+        completion = self.llm.complete(system, prompt)
+        self.calls += 1
+        self.input_tokens += completion.input_tokens
+        self.output_tokens += completion.output_tokens
+        return completion
+
+
 def build_dataset_file(
     llm: LLM,
     chunks: list[Chunk],
@@ -103,12 +131,13 @@ def build_dataset_file(
     output: str | Path,
     seed: int = 42,
     min_chars: int = 200,
+    excluded: Collection[str] = (),
 ) -> tuple[int, int]:
     """Grava cada pergunta assim que ela é gerada e retoma de onde parou.
 
     Uma falha no meio (saldo, rede, 429) não perde as perguntas já pagas: ao rodar de novo
-    com a mesma semente, a amostra é a mesma e os chunks que já estão no arquivo são pulados.
-    Devolve (novas, já existentes).
+    com a mesma semente, a amostra é a mesma e os chunks que já estão no arquivo, ou na
+    lista de exclusão da revisão manual, são pulados. Devolve (novas, já existentes).
     """
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,7 +148,9 @@ def build_dataset_file(
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
 
-        rows = build_dataset(llm, chunks, n, min_chars, seed, skip_ids=done, on_row=write)
+        rows = build_dataset(
+            llm, chunks, n, min_chars, seed, skip_ids=done | set(excluded), on_row=write
+        )
     return len(rows), len(done)
 
 
@@ -129,14 +160,23 @@ def main() -> None:
     parser.add_argument("output")
     parser.add_argument("-n", type=int, default=50)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--exclude", default=str(EXCLUDED_CHUNKS))
     args = parser.parse_args()
 
     s = get_settings()
     chunks = build_vector_store(s).all_chunks()
-    new, existing = build_dataset_file(build_judge(s), chunks, args.n, args.output, args.seed)
+    excluded = excluded_chunk_ids(Path(args.exclude))
+    meter = UsageMeter(build_judge(s))
+    new, existing = build_dataset_file(
+        meter, chunks, args.n, args.output, args.seed, excluded=excluded
+    )
+    cost = cost_usd(meter.model, meter.input_tokens, meter.output_tokens, s.llm_prices)
     print(
-        f"{new} perguntas novas ({existing} já existiam) a partir de {len(chunks)} chunks "
-        f"-> {args.output}"
+        f"{new} perguntas novas ({existing} já existiam, {len(excluded)} chunks excluídos) "
+        f"a partir de {len(chunks)} chunks -> {args.output}\n"
+        f"{meter.calls} chamadas a {meter.name}/{meter.model}: "
+        f"{meter.input_tokens} tokens de entrada + {meter.output_tokens} de saída = "
+        + (f"US$ {cost:.4f}" if cost is not None else "custo desconhecido (modelo sem preço)")
     )
 
 

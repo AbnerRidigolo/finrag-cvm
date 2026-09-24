@@ -4,7 +4,13 @@ import pytest
 
 from finrag.agent import FinRAGAgent
 from finrag.eval.answer_eval import judge_answer, run, summarize
-from finrag.eval.build_dataset import build_dataset, build_dataset_file, sample_chunks
+from finrag.eval.build_dataset import (
+    UsageMeter,
+    build_dataset,
+    build_dataset_file,
+    excluded_chunk_ids,
+    sample_chunks,
+)
 from finrag.llm import Completion, ExtractiveLLM, strip_code_fence
 from finrag.metrics import cost_usd
 from finrag.schemas import Answer
@@ -119,3 +125,21 @@ def test_dataset_gravado_a_cada_pergunta_e_retomado_apos_falha(chunks, tmp_path)
     rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
     assert [r["question"] for r in rows] == ["P1?", "P2?", "P3?", "P4?"]
     assert len({r["chunk_id"] for r in rows}) == 4
+
+
+def test_chunks_excluidos_na_revisao_nao_sao_regerados(chunks, tmp_path):
+    output = tmp_path / "perguntas.jsonl"
+    primeira = sample_chunks(chunks, n=3, min_chars=50, seed=1)[0]
+    lista = tmp_path / "excluidos.txt"
+    lista.write_text(f"# removidos na revisão\n\n{primeira.id}\n", encoding="utf-8")
+
+    excluded = excluded_chunk_ids(lista)
+    llm = UsageMeter(ScriptedLLM(['{"question": "P2?"}', '{"question": "P3?"}'], tokens=(10, 2)))
+    new, _ = build_dataset_file(
+        llm, chunks, n=3, output=output, seed=1, min_chars=50, excluded=excluded
+    )
+
+    ids = {json.loads(line)["chunk_id"] for line in output.read_text(encoding="utf-8").splitlines()}
+    assert excluded == {primeira.id} and primeira.id not in ids and new == 2
+    assert (llm.calls, llm.input_tokens, llm.output_tokens) == (2, 20, 4)
+    assert excluded_chunk_ids(tmp_path / "nao-existe.txt") == set()

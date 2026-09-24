@@ -1,0 +1,2 @@
+# Chunks cujas perguntas sintéticas foram removidas na revisão manual (um chunk_id por linha).
+# O build_dataset pula estes chunks, para que a pergunta removida não seja gerada de novo.
