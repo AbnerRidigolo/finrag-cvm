@@ -170,7 +170,30 @@ Avaliação de recuperação em `data/eval/questions.jsonl` (10 perguntas com o 
 
 Esses números usam o corpus fictício e embeddings por hashing, então medem o encanamento, não a qualidade semântica.
 
-**TODO — documentos reais da CVM:** colar aqui a tabela gerada em `data/eval/results/retrieval.md` (com a linha "híbrido + re-ranking" e as latências) e o resumo da avaliação de respostas.
+### Documentos reais da CVM
+
+Corpus: Resolução CVM 175 (Parte Geral e Anexos Normativos I a XII) e três regulamentos de FIDC, **16 documentos e 1.578 trechos** (ver [Dados reais da CVM](#dados-reais-da-cvm)). Dataset: **43 perguntas sintéticas** geradas pelo `gpt-6-sol` e revisadas à mão, uma ou mais por documento. Embeddings `text-embedding-3-small`, re-ranking com o cross-encoder `mmarco-mMiniLMv2-L12-H384-v1` rodando em CPU, 20 candidatos por método, k = 5. Entre colchetes, o IC de 95% por bootstrap (1.000 reamostragens das perguntas, semente fixa); a latência inclui a chamada de rede à API de embeddings.
+
+| Configuração | Hit@1 | Hit@5 | MRR@5 | p50 (ms) | p95 (ms) |
+| :-- | --: | --: | --: | --: | --: |
+| Denso | 0,65 [0,51–0,79] | 0,88 [0,77–0,98] | 0,75 [0,63–0,85] | 336 | 814 |
+| Esparso (BM25) | 0,60 [0,47–0,74] | 0,84 [0,72–0,93] | 0,70 [0,58–0,81] | 3 | 4 |
+| Híbrido (RRF) | 0,67 [0,53–0,81] | 0,88 [0,77–0,98] | 0,77 [0,65–0,87] | 320 | 428 |
+| Híbrido + re-ranking | 0,81 [0,67–0,91] | 0,95 [0,88–1,00] | 0,87 [0,77–0,94] | 2.164 | 2.329 |
+
+Diferença pareada (as mesmas perguntas reamostradas nos dois lados), IC de 95%:
+
+| Comparação | Δ Hit@1 | Δ Hit@5 | Δ MRR@5 |
+| :-- | --: | --: | --: |
+| Híbrido − Denso | +0,02 [−0,09 a +0,16] | +0,00 [−0,09 a +0,09] | +0,02 [−0,07 a +0,11] |
+| Híbrido − BM25 | +0,07 [−0,02 a +0,19] | +0,05 [−0,05 a +0,14] | +0,07 [+0,00 a +0,14] |
+| Re-ranking − Híbrido | +0,14 [+0,00 a +0,26] | +0,07 [+0,00 a +0,16] | +0,10 [+0,01 a +0,19] |
+
+**Leitura.** O re-ranking melhorou o MRR (+0,10, IC 95% +0,01 a +0,19); no Hit@1 a melhora estimada é de +0,14, mas o intervalo encosta no zero (+0,00 a +0,26), então com 43 perguntas o tamanho do ganho é incerto. O custo é de latência: o p50 passou de 320 ms para 2.164 ms com o cross-encoder em CPU. **O híbrido não superou o denso** neste dataset: a diferença é de +0,02 no Hit@1, com IC de −0,09 a +0,16. Uma hipótese, não testada, é que as perguntas citam o fundo ou o tipo de fundo, que também está no cabeçalho indexado de cada trecho, e isso favorece igualmente o denso e o BM25, reduzindo o espaço para a fusão complementar os dois. Contra o BM25 sozinho, o híbrido tem vantagem pequena e no limite (MRR +0,07, IC +0,00 a +0,14).
+
+**10 ou 20 candidatos por método.** Com re-ranking, reduzir de 20 para 10 candidatos não mudou o resultado de nenhuma das 43 perguntas (diferença pareada de 0,00 nas três métricas) e baixou o p50 de 2.555 ms para 1.423 ms na mesma execução, porque o cross-encoder passa a ler em média 16,6 trechos em vez de 33,7. Sem re-ranking, 5 perguntas mudaram, com diferença dentro da margem (Hit@5 +0,05, IC +0,00 a +0,12). A avaliação de respostas abaixo usa 10 candidatos. A equivalência vale para este dataset; com perguntas mais difíceis, um trecho relevante fora dos 10 primeiros de cada método passaria a ser perdido.
+
+Ressalvas: perguntas sintéticas, uma única rodada, 43 perguntas, e a amostragem dá o mesmo peso a documentos de tamanhos muito diferentes.
 
 ### Avaliação das respostas (LLM como juiz)
 
@@ -195,7 +218,7 @@ O juiz recebe critérios com âncoras por nota, escreve a justificativa antes da
 
 **Busca híbrida com RRF.** Embeddings capturam paráfrases ("quanto custa o fundo" e "taxa de administração"), mas diluem termos exatos como "Art. 6º", "FIDC" ou um CNPJ, que o BM25 acerta. O RRF combina os rankings pela posição, sem precisar calibrar escalas de score diferentes.
 
-**Re-ranking só nos candidatos.** O cross-encoder lê pergunta e trecho juntos e é mais preciso, mas é caro. Ele só roda sobre os ~20 candidatos da fusão.
+**Re-ranking só nos candidatos.** O cross-encoder lê pergunta e trecho juntos e é mais preciso, mas é caro. Ele só roda sobre os candidatos da fusão: com N candidatos por método, até 2N trechos (em média 33,7 com N = 20 e 16,6 com N = 10 no corpus real), por isso N controla diretamente a latência.
 
 **BM25 reconstruído a partir do Chroma.** O Chroma é a fonte única de verdade dos chunks; o índice BM25 é recriado dele na inicialização. Isso evita dois índices dessincronizados.
 

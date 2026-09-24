@@ -3,7 +3,7 @@ import json
 import pytest
 
 from finrag.agent import FinRAGAgent
-from finrag.eval.answer_eval import judge_answer, run, summarize
+from finrag.eval.answer_eval import CostBudget, judge_answer, rejudge, run, summarize
 from finrag.eval.build_dataset import (
     UsageMeter,
     build_dataset,
@@ -164,3 +164,66 @@ def test_pergunta_que_copia_6_palavras_do_trecho_e_marcada(chunks, caplog):
     marcadas = [r for r in rows if r["copied"]]
     assert len(marcadas) == 1 and marcadas[0]["question"] == copia
     assert "copiada" in caplog.text
+
+
+PERGUNTAS = [{"question": "O que é linha d'água?"}, {"question": "Qual o prazo do Beta?"}] * 2
+
+
+def test_teto_de_custo_para_antes_de_ultrapassar(retriever, caplog):
+    agent = FinRAGAgent(ExtractiveLLM(), retriever)  # agente offline: custo zero
+    judge = ScriptedLLM(['{"fidelidade": 5, "relevancia": 5}'] * 4, tokens=(1000, 100))
+    budget = CostBudget(0.007)  # cada julgamento custa 0,003 com os preços abaixo
+    with caplog.at_level("WARNING", logger="finrag"):
+        results = run(agent, judge, PERGUNTAS, {"scripted": [2.0, 10.0]}, budget)
+    # Após 2 perguntas (0,006), a 3ª levaria a 0,009 > 0,007: para antes de chamar.
+    assert len(results) == 2 and budget.stopped and budget.spent <= 0.007
+    assert len(judge.replies) == 2  # as chamadas não feitas não foram pagas
+    assert "Teto de custo" in caplog.text
+
+
+def test_sem_teto_avalia_tudo(retriever):
+    judge = ScriptedLLM(['{"fidelidade": 5, "relevancia": 5}'] * 4)
+    results = run(FinRAGAgent(ExtractiveLLM(), retriever), judge, PERGUNTAS)
+    assert len(results) == 4 and all(r["context"] for r in results)
+
+
+def test_rejulgamento_mede_a_concordancia(retriever):
+    primeira = ScriptedLLM(
+        [
+            '{"fidelidade": 5, "relevancia": 5}',
+            '{"fidelidade": 4, "relevancia": 3}',
+            '{"fidelidade": 2, "relevancia": 5}',
+            '{"fidelidade": 5, "relevancia": 4}',
+        ]
+    )
+    results = run(FinRAGAgent(ExtractiveLLM(), retriever), primeira, PERGUNTAS)
+    # Segunda rodada: nota 5 em todas. Concorda em 2 de 4; diferenças 0, 1, 3 e 0.
+    segunda = ScriptedLLM([], tokens=(1000, 100))
+    segunda.complete = lambda system, prompt: Completion(
+        json.dumps({"fidelidade": 5, "relevancia": 5}), "scripted", "scripted", 1000, 100
+    )
+    summary = rejudge(segunda, results, n=4, prices={"scripted": [2.0, 10.0]})
+    esperadas = [r["fidelidade"] for r in results]  # [5, 4, 2, 5] contra 5 em todas
+    assert summary["n"] == 4
+    assert summary["concordancia_fidelidade"] == sum(f == 5 for f in esperadas) / 4
+    assert summary["dif_media_abs_fidelidade"] == sum(abs(5 - f) for f in esperadas) / 4
+    assert summary["custo_usd"] == 0.012
+
+
+def test_rejulgamento_usa_o_mesmo_contexto(retriever):
+    results = run(
+        FinRAGAgent(ExtractiveLLM(), retriever),
+        ScriptedLLM(['{"fidelidade": 5, "relevancia": 5}']),
+        PERGUNTAS[:1],
+    )
+    vistos = []
+
+    class Juiz:
+        name = model = "j"
+
+        def complete(self, system, prompt):
+            vistos.append(prompt)
+            return Completion('{"fidelidade": 5, "relevancia": 5}', "j", "j")
+
+    rejudge(Juiz(), results, n=1)
+    assert results[0]["context"] and results[0]["context"] in vistos[0]
