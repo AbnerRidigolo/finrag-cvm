@@ -31,6 +31,7 @@ class RetrievedChunk(BaseModel):
 class Source(BaseModel):
     id: str
     source: str
+    title: str = ""
     article: str
     excerpt: str
     score: float

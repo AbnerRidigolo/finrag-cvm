@@ -1,0 +1,78 @@
+{
+  "regulamento_fidc_croma_2025-09.pdf": {
+    "title": "Regulamento do Croma Fundo de Investimento em Direitos Creditórios Responsabilidade Limitada",
+    "subject": "Croma FIDC"
+  },
+  "regulamento_fidc_special_situations_2025-11.pdf": {
+    "title": "Regulamento do Fundo de Investimento em Direitos Creditórios Special Situations",
+    "subject": "FIDC Special Situations"
+  },
+  "regulamento_fidc_vqs_2025-12.pdf": {
+    "title": "Regulamento do VQS Fundo de Investimento em Direitos Creditórios",
+    "subject": "VQS FIDC"
+  },
+  "resol175consolid_ParteGeral.pdf": {
+    "title": "Resolução CVM nº 175, de 23 de dezembro de 2022 – Parte Geral",
+    "subject": "fundos de investimento em geral"
+  },
+  "resol175consolid_Anexo01.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo I – Fundos de Investimento Financeiro",
+    "subject": "FIF"
+  },
+  "resol175consolid_Anexo02.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo II – Fundos de Investimento em Direitos Creditórios",
+    "subject": "FIDC"
+  },
+  "resol175consolid_Anexo03.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo III – Fundos de Investimento Imobiliário",
+    "subject": "FII"
+  },
+  "resol175consolid_Anexo04.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo IV – Fundos de Investimento em Participações",
+    "subject": "FIP"
+  },
+  "resol175consolid_Anexo05.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo V – Fundos de Índice",
+    "subject": "Fundo de Índice"
+  },
+  "resol175consolid_Anexo06.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo VI – Fundos de Investimento nas Cadeias Produtivas do Agronegócio",
+    "subject": "Fiagro"
+  },
+  "resol175consolid_Anexo07.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo VII – Fundos Mútuos de Privatização – FGTS",
+    "subject": "FMP-FGTS"
+  },
+  "resol175consolid_Anexo08.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo VIII – Fundos de Financiamento da Indústria Cinematográfica Nacional",
+    "subject": "Funcine"
+  },
+  "resol175consolid_Anexo09.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo IX – Fundos Mútuos de Ações Incentivadas",
+    "subject": "FMAI"
+  },
+  "resol175consolid_Anexo10.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo X – Fundos de Investimento Cultural e Artístico",
+    "subject": "Ficart"
+  },
+  "resol175consolid_Anexo11.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo XI – Fundos Previdenciários",
+    "subject": "fundos previdenciários"
+  },
+  "resol175consolid_Anexo12.pdf": {
+    "title": "Resolução CVM nº 175 – Anexo Normativo XII – Fundos de Investimento em Direitos Creditórios do Programa de Incentivo à Implementação de Projetos de Interesse Social",
+    "subject": "FIDC-PIPS"
+  },
+  "glossario_fundos.txt": {
+    "title": "GLOSSÁRIO DE FUNDOS DE INVESTIMENTO",
+    "subject": "fundos de investimento em geral"
+  },
+  "regulamento_fundo_exemplo_alpha.txt": {
+    "title": "REGULAMENTO DO FUNDO EXEMPLO ALPHA FIDC",
+    "subject": "Fundo Exemplo Alpha FIDC"
+  },
+  "regulamento_fundo_exemplo_beta.txt": {
+    "title": "REGULAMENTO DO FUNDO EXEMPLO BETA FIP",
+    "subject": "Fundo Exemplo Beta FIP"
+  }
+}

@@ -8,6 +8,7 @@ artigo e só quebra um artigo em pedaços menores quando ele excede o limite de 
 import hashlib
 import logging
 import re
+from collections.abc import Mapping
 
 from finrag.ingestion.loaders import RawDocument
 from finrag.schemas import Chunk
@@ -106,9 +107,13 @@ def _title(text: str) -> str:
     return "" if _article_label(first_line) else first_line[:200]
 
 
-def chunk_document(doc: RawDocument, max_chars: int = 1200, overlap: int = 150) -> list[Chunk]:
+def chunk_document(
+    doc: RawDocument, max_chars: int = 1200, overlap: int = 150, title: str | None = None
+) -> list[Chunk]:
+    """Divide um documento em chunks. `title` vem do mapa de títulos; sem ele, usa a primeira
+    linha do texto, o que funciona em textos limpos mas não em PDFs com timbre."""
     text = _normalize(doc.text)
-    title = _title(text)
+    title = title or _title(text)
     sections = [s.strip() for s in ARTICLE_RE.split(text) if s.strip()]
     if CONSOLIDATED_SOURCE_RE.match(doc.source):
         sections, dropped = drop_superseded(sections)
@@ -150,6 +155,18 @@ def chunk_document(doc: RawDocument, max_chars: int = 1200, overlap: int = 150) 
 
 
 def chunk_documents(
-    docs: list[RawDocument], max_chars: int = 1200, overlap: int = 150
+    docs: list[RawDocument],
+    max_chars: int = 1200,
+    overlap: int = 150,
+    titles: Mapping[str, str] | None = None,
 ) -> list[Chunk]:
-    return [c for doc in docs for c in chunk_document(doc, max_chars, overlap)]
+    """`titles` mapeia o nome do arquivo para o título do documento (data/doc_titles.json)."""
+    chunks = []
+    for doc in docs:
+        title = titles.get(doc.source) if titles else None
+        if titles and title is None:
+            logger.warning(
+                "%s não está no mapa de títulos; usando a primeira linha do texto", doc.source
+            )
+        chunks.extend(chunk_document(doc, max_chars, overlap, title))
+    return chunks

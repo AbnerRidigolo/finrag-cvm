@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "finrag-cvm"
-version = "0.2.0"
+version = "0.3.0"
 description = "RAG híbrido (denso + esparso + re-ranking) e grafo de fundos sobre dados públicos da CVM"
 readme = "README.md"
 requires-python = ">=3.11"

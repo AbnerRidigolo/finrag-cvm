@@ -45,3 +45,16 @@ def test_api_com_agente_injetado_nao_carrega_o_env(tmp_path, monkeypatch, retrie
     assert client.post("/ask", json={"question": "O que é linha d'água?"}).status_code == 200
 
     assert dict(os.environ) == antes
+
+
+def test_versao_igual_no_pacote_na_api_e_no_pyproject(retriever):
+    import tomllib
+    from pathlib import Path
+
+    from finrag import __version__
+    from finrag.api import create_app
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    app = create_app(FinRAGAgent(ExtractiveLLM(), retriever))
+    assert __version__ == declared == app.version == "0.3.0"

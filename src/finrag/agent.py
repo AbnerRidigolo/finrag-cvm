@@ -180,6 +180,7 @@ class FinRAGAgent:
             Source(
                 id=c.chunk.id,
                 source=c.chunk.source,
+                title=c.chunk.context,
                 article=c.chunk.article,
                 excerpt=c.chunk.text[:300],
                 score=round(c.score, 4),
