@@ -9,7 +9,7 @@ from pathlib import Path
 from finrag.config import get_settings, load_api_keys
 from finrag.factory import build_agent, build_vector_store
 from finrag.ingestion.chunking import chunk_documents
-from finrag.ingestion.loaders import load_directory
+from finrag.ingestion.loaders import load_directory, load_doc_titles
 
 CAD_FI_URL = "https://dados.cvm.gov.br/dados/FI/CAD/DADOS/cad_fi.csv"
 
@@ -18,7 +18,8 @@ def cmd_index(directory: str) -> None:
     s = get_settings()
     start = time.perf_counter()
     docs = load_directory(directory)
-    chunks = chunk_documents(docs, s.chunk_max_chars, s.chunk_overlap_chars)
+    titles = {k: v["title"] for k, v in load_doc_titles(s.doc_titles_path).items()}
+    chunks = chunk_documents(docs, s.chunk_max_chars, s.chunk_overlap_chars, titles or None)
     build_vector_store(s).add(chunks)
     elapsed = time.perf_counter() - start
     print(
@@ -31,7 +32,7 @@ def cmd_ask(question: str) -> None:
     answer = build_agent().ask(question)
     print(f"[rota: {answer.route}]\n\n{answer.answer}\n")
     for i, src in enumerate(answer.sources, 1):
-        print(f"[{i}] {src.source} {src.article} (score {src.score})")
+        print(f"[{i}] {src.title or src.source} {src.article} (score {src.score})")
     u = answer.usage
     stages = ", ".join(f"{k} {v:.0f} ms" for k, v in u.stage_latency_ms.items())
     print(

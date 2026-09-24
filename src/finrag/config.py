@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     pinecone_cloud: str = "aws"
     pinecone_region: str = "us-east-1"
 
+    # Títulos e assuntos dos documentos (ver ingestion/loaders.py:load_doc_titles).
+    doc_titles_path: str = "data/doc_titles.json"
+
     chunk_max_chars: int = 1200
     chunk_overlap_chars: int = 150
     candidates_per_retriever: int = 20

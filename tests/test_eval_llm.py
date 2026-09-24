@@ -9,6 +9,7 @@ from finrag.eval.build_dataset import (
     build_dataset,
     build_dataset_file,
     excluded_chunk_ids,
+    longest_shared_run,
     sample_chunks,
 )
 from finrag.llm import Completion, ExtractiveLLM, strip_code_fence
@@ -143,3 +144,20 @@ def test_chunks_excluidos_na_revisao_nao_sao_regerados(chunks, tmp_path):
     assert excluded == {primeira.id} and primeira.id not in ids and new == 2
     assert (llm.calls, llm.input_tokens, llm.output_tokens) == (2, 20, 4)
     assert excluded_chunk_ids(tmp_path / "nao-existe.txt") == set()
+
+
+def test_pergunta_que_copia_6_palavras_do_trecho_e_marcada(chunks, caplog):
+    trecho = "A taxa de administração é de 1,2% ao ano sobre o patrimônio líquido."
+    assert longest_shared_run("Qual a TAXA DE ADMINISTRACAO E DE 1,2% ao ano?", trecho) >= 6
+    assert longest_shared_run("Quanto custa a taxa de administração do fundo?", trecho) == 4
+
+    chunk = next(c for c in chunks if c.article and len(c.text) >= 50)
+    copia = " ".join(chunk.text.split()[:8])
+    llm = ScriptedLLM([json.dumps({"question": copia}), '{"question": "Outra pergunta?"}'])
+    with caplog.at_level("WARNING", logger="finrag"):
+        rows = build_dataset(
+            llm, [chunk, *[c for c in chunks if c is not chunk]], n=2, min_chars=50
+        )
+    marcadas = [r for r in rows if r["copied"]]
+    assert len(marcadas) == 1 and marcadas[0]["question"] == copia
+    assert "copiada" in caplog.text
