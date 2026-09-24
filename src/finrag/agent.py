@@ -5,18 +5,25 @@
 
 - "normas": perguntas sobre regras e regulamentos -> recuperação híbrida nos documentos.
 - "fundos": perguntas sobre fundos, gestores e administradores -> consulta ao grafo Neo4j.
+
+Cada etapa é cronometrada e cada chamada ao LLM registra tokens. Os dois vão para o
+Prometheus e para o campo `usage` da resposta, o que dá latência e custo por pergunta.
 """
 
 import json
+import operator
 import re
-from typing import Any, TypedDict
+import time
+from collections.abc import Callable
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 
+from finrag import metrics
 from finrag.graph.store import QUERIES, GraphStore
-from finrag.llm import LLM
+from finrag.llm import LLM, Completion
 from finrag.retrieval.hybrid import HybridRetriever
-from finrag.schemas import Answer, RetrievedChunk, Source
+from finrag.schemas import Answer, RetrievedChunk, Source, Usage
 
 ROUTER_SYSTEM = f"""Você classifica perguntas sobre o mercado de fundos brasileiro.
 Responda somente com JSON no formato {{"route": "...", "intent": "...", "entity": "..."}}.
@@ -41,7 +48,10 @@ class AgentState(TypedDict, total=False):
     entity: str
     chunks: list[RetrievedChunk]
     rows: list[dict[str, Any]]
+    context: str
     answer: str
+    completions: Annotated[list[Completion], operator.add]
+    timings: Annotated[list[tuple[str, float]], operator.add]
 
 
 def heuristic_route(question: str) -> dict[str, str]:
@@ -56,6 +66,21 @@ def heuristic_route(question: str) -> dict[str, str]:
     return {"route": "fundos", "intent": intent, "entity": entity}
 
 
+def _timed(stage: str, fn: Callable[[AgentState], dict]) -> Callable[[AgentState], dict]:
+    def wrapper(state: AgentState) -> dict:
+        start = time.perf_counter()
+        try:
+            result = fn(state)
+        except Exception:
+            metrics.ERRORS.labels(stage).inc()
+            raise
+        elapsed = time.perf_counter() - start
+        metrics.STAGE_LATENCY.labels(stage).observe(elapsed)
+        return {**result, "timings": [(stage, elapsed)]}
+
+    return wrapper
+
+
 class FinRAGAgent:
     def __init__(
         self,
@@ -63,18 +88,23 @@ class FinRAGAgent:
         retriever: HybridRetriever,
         graph: GraphStore | None = None,
         top_k: int = 5,
+        prices: dict[str, list[float]] | None = None,
     ) -> None:
         self.llm = llm
         self.retriever = retriever
         self.graph = graph
         self.top_k = top_k
+        self.prices = prices or {}
         self.app = self._build()
 
-    def _route(self, state: AgentState) -> AgentState:
+    def _route(self, state: AgentState) -> dict:
         decision = heuristic_route(state["question"])
+        completions: list[Completion] = []
         if self.llm.name != "extractive":
+            completion = self.llm.complete(ROUTER_SYSTEM, state["question"])
+            completions.append(completion)
             try:
-                parsed = json.loads(self.llm.complete(ROUTER_SYSTEM, state["question"]))
+                parsed = json.loads(completion.text)
                 if parsed.get("route") in {"normas", "fundos"}:
                     decision = {k: str(parsed.get(k, "")) for k in ("route", "intent", "entity")}
             except (json.JSONDecodeError, AttributeError):
@@ -83,37 +113,37 @@ class FinRAGAgent:
             self.graph is None or decision["intent"] not in QUERIES
         ):
             decision = {"route": "normas", "intent": "", "entity": ""}
-        return decision
+        return {**decision, "completions": completions}
 
-    def _retrieve_docs(self, state: AgentState) -> AgentState:
+    def _retrieve_docs(self, state: AgentState) -> dict:
         return {"chunks": self.retriever.retrieve(state["question"], k=self.top_k)}
 
-    def _query_graph(self, state: AgentState) -> AgentState:
+    def _query_graph(self, state: AgentState) -> dict:
         assert self.graph is not None
         return {"rows": self.graph.query(state["intent"], state.get("entity", ""))}
 
-    def _generate(self, state: AgentState) -> AgentState:
+    def _generate(self, state: AgentState) -> dict:
         if state.get("route") == "fundos":
-            rows = state.get("rows", [])
             context = "\n".join(
-                f"[{i}] {json.dumps(r, ensure_ascii=False)}" for i, r in enumerate(rows, 1)
+                f"[{i}] {json.dumps(r, ensure_ascii=False)}"
+                for i, r in enumerate(state.get("rows", []), 1)
             )
         else:
-            chunks = state.get("chunks", [])
             context = "\n\n".join(
                 f"[{i}] ({c.chunk.source}{', ' + c.chunk.article if c.chunk.article else ''})\n"
                 f"{c.chunk.text}"
-                for i, c in enumerate(chunks, 1)
+                for i, c in enumerate(state.get("chunks", []), 1)
             )
         prompt = f"Contexto:\n{context or '(vazio)'}\n\nPergunta: {state['question']}"
-        return {"answer": self.llm.complete(ANSWER_SYSTEM, prompt)}
+        completion = self.llm.complete(ANSWER_SYSTEM, prompt)
+        return {"answer": completion.text, "context": context, "completions": [completion]}
 
     def _build(self):
         graph = StateGraph(AgentState)
-        graph.add_node("route", self._route)
-        graph.add_node("retrieve_docs", self._retrieve_docs)
-        graph.add_node("query_graph", self._query_graph)
-        graph.add_node("generate", self._generate)
+        graph.add_node("route", _timed("route", self._route))
+        graph.add_node("retrieve_docs", _timed("retrieve", self._retrieve_docs))
+        graph.add_node("query_graph", _timed("graph", self._query_graph))
+        graph.add_node("generate", _timed("generate", self._generate))
         graph.set_entry_point("route")
         graph.add_conditional_edges(
             "route",
@@ -124,8 +154,28 @@ class FinRAGAgent:
         graph.add_edge("generate", END)
         return graph.compile()
 
+    def _usage(self, state: AgentState, elapsed: float) -> Usage:
+        usage = Usage(latency_ms=round(elapsed * 1000, 1))
+        for stage, seconds in state.get("timings", []):
+            usage.stage_latency_ms[stage] = round(seconds * 1000, 1)
+        for c in state.get("completions", []):
+            usage.input_tokens += c.input_tokens
+            usage.output_tokens += c.output_tokens
+            usage.llm_calls += 1
+            usage.cost_usd += metrics.record_llm_call(
+                c.provider, c.model, c.input_tokens, c.output_tokens, self.prices
+            )
+        usage.cost_usd = round(usage.cost_usd, 6)
+        return usage
+
     def ask(self, question: str) -> Answer:
+        start = time.perf_counter()
         state = self.app.invoke({"question": question})
+        elapsed = time.perf_counter() - start
+
+        metrics.REQUESTS.labels(state["route"]).inc()
+        metrics.REQUEST_LATENCY.labels(state["route"]).observe(elapsed)
+
         sources = [
             Source(
                 id=c.chunk.id,
@@ -133,9 +183,15 @@ class FinRAGAgent:
                 article=c.chunk.article,
                 excerpt=c.chunk.text[:300],
                 score=round(c.score, 4),
+                text=c.chunk.text,
             )
             for c in state.get("chunks", [])
         ]
         return Answer(
-            question=question, answer=state["answer"], route=state["route"], sources=sources
+            question=question,
+            answer=state["answer"],
+            route=state["route"],
+            sources=sources,
+            context=state.get("context", ""),
+            usage=self._usage(state, elapsed),
         )

@@ -1,4 +1,4 @@
-.PHONY: install dev lint test index demo api eval up down graph-load
+.PHONY: install dev lint test index demo api eval up down graph-load download index-real dataset eval-real eval-answers
 
 install:
 	pip install -e ".[all]"
@@ -33,3 +33,18 @@ down:
 
 graph-load:
 	python -m finrag.pipeline graph-load data/sample/cad_fi_exemplo.csv
+
+download:
+	python -m finrag.pipeline download-cadastro data/raw/cad_fi.csv
+
+index-real:
+	python -m finrag.pipeline index data/raw/docs
+
+dataset:
+	python -m finrag.eval.build_dataset data/eval/cvm_questions.jsonl -n 50
+
+eval-real:
+	python -m finrag.eval.retrieval_eval data/eval/cvm_questions.jsonl --output data/eval/results/retrieval.md
+
+eval-answers:
+	python -m finrag.eval.answer_eval data/eval/cvm_questions.jsonl -n 30

@@ -1,14 +1,29 @@
-"""Camada de LLM com provedores intercambiáveis (OpenAI, Anthropic e modo offline)."""
+"""Camada de LLM com provedores intercambiáveis (OpenAI, Anthropic e modo offline).
 
+Todo provedor devolve um `Completion` com o texto e os tokens consumidos, o que permite
+medir custo por pergunta sem depender de callbacks específicos de cada SDK.
+"""
+
+from dataclasses import dataclass
 from typing import Protocol
 
 from finrag.config import Settings
 
 
+@dataclass(frozen=True)
+class Completion:
+    text: str
+    provider: str
+    model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
 class LLM(Protocol):
     name: str
+    model: str
 
-    def complete(self, system: str, prompt: str) -> str: ...
+    def complete(self, system: str, prompt: str) -> Completion: ...
 
 
 class OpenAILLM:
@@ -20,13 +35,20 @@ class OpenAILLM:
         self.client = OpenAI()
         self.model = model
 
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(self, system: str, prompt: str) -> Completion:
         response = self.client.chat.completions.create(
             model=self.model,
             temperature=0,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         )
-        return response.choices[0].message.content or ""
+        usage = response.usage
+        return Completion(
+            text=response.choices[0].message.content or "",
+            provider=self.name,
+            model=self.model,
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+        )
 
 
 class AnthropicLLM:
@@ -38,7 +60,7 @@ class AnthropicLLM:
         self.client = anthropic.Anthropic()
         self.model = model
 
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(self, system: str, prompt: str) -> Completion:
         response = self.client.messages.create(
             model=self.model,
             max_tokens=1024,
@@ -46,7 +68,13 @@ class AnthropicLLM:
             system=system,
             messages=[{"role": "user", "content": prompt}],
         )
-        return "".join(block.text for block in response.content if block.type == "text")
+        return Completion(
+            text="".join(block.text for block in response.content if block.type == "text"),
+            provider=self.name,
+            model=self.model,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
 
 
 class ExtractiveLLM:
@@ -57,20 +85,38 @@ class ExtractiveLLM:
     """
 
     name = "extractive"
+    model = "extractive"
 
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(self, system: str, prompt: str) -> Completion:
         marker = "[1]"
         start = prompt.find(marker)
         if start == -1:
-            return "Não encontrei trechos relevantes nos documentos indexados."
-        end = prompt.find("\n[2]", start)
-        excerpt = prompt[start + len(marker) : end if end != -1 else None].strip()
-        return f"Trecho mais relevante encontrado [1]:\n{excerpt[:800]}"
+            text = "Não encontrei trechos relevantes nos documentos indexados."
+        else:
+            end = prompt.find("\n[2]", start)
+            excerpt = prompt[start + len(marker) : end if end != -1 else None].strip()
+            text = f"Trecho mais relevante encontrado [1]:\n{excerpt[:800]}"
+        return Completion(text=text, provider=self.name, model=self.model)
+
+
+def make_llm(provider: str, model: str) -> LLM:
+    if provider == "openai":
+        return OpenAILLM(model)
+    if provider == "anthropic":
+        return AnthropicLLM(model)
+    if provider == "extractive":
+        return ExtractiveLLM()
+    raise ValueError(f"Provedor de LLM desconhecido: {provider}")
 
 
 def build_llm(settings: Settings) -> LLM:
-    if settings.llm_provider == "openai":
-        return OpenAILLM(settings.llm_model)
-    if settings.llm_provider == "anthropic":
-        return AnthropicLLM(settings.llm_model)
-    return ExtractiveLLM()
+    return make_llm(settings.llm_provider, settings.llm_model)
+
+
+def build_judge(settings: Settings) -> LLM:
+    provider = settings.judge_provider or settings.llm_provider
+    if provider == "extractive":
+        raise ValueError(
+            "O juiz precisa de um LLM real. Defina JUDGE_PROVIDER=openai ou anthropic no .env."
+        )
+    return make_llm(provider, settings.judge_model or settings.llm_model)

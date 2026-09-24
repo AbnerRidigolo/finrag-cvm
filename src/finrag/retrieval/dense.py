@@ -1,4 +1,4 @@
-"""Busca densa: vetores no ChromaDB (modo embarcado, persistido em disco)."""
+"""Busca densa com ChromaDB (modo embarcado, persistido em disco). Padrão para desenvolvimento."""
 
 import chromadb
 
@@ -6,7 +6,7 @@ from finrag.retrieval.embeddings import Embedder
 from finrag.schemas import Chunk, RetrievedChunk
 
 
-class DenseStore:
+class ChromaStore:
     def __init__(self, embedder: Embedder, path: str | None, collection: str) -> None:
         client = chromadb.PersistentClient(path=path) if path else chromadb.EphemeralClient()
         self.embedder = embedder
@@ -61,3 +61,7 @@ class DenseStore:
                 strict=True,
             )
         ]
+
+
+# Nome antigo mantido por compatibilidade.
+DenseStore = ChromaStore

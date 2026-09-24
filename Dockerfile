@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir ".[openai,anthropic,graph]"
+RUN pip install --no-cache-dir ".[openai,anthropic,graph,pinecone]"
 
 COPY data ./data
 EXPOSE 8000

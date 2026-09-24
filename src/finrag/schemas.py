@@ -34,6 +34,16 @@ class Source(BaseModel):
     article: str
     excerpt: str
     score: float
+    text: str = Field(default="", exclude=True, description="Texto completo, usado pelo juiz")
+
+
+class Usage(BaseModel):
+    latency_ms: float = 0.0
+    stage_latency_ms: dict[str, float] = {}
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    llm_calls: int = 0
 
 
 class Answer(BaseModel):
@@ -41,3 +51,5 @@ class Answer(BaseModel):
     answer: str
     route: str
     sources: list[Source] = []
+    context: str = Field(default="", exclude=True, description="Contexto enviado ao LLM")
+    usage: Usage = Usage()

@@ -1,19 +1,40 @@
-"""Monta os componentes a partir da configuração (usado pela CLI e pela API)."""
+"""Monta os componentes a partir da configuração (usado pela CLI, pela API e pela avaliação)."""
 
 from finrag.agent import FinRAGAgent
 from finrag.config import Settings, get_settings
 from finrag.graph.store import GraphStore
 from finrag.llm import build_llm
-from finrag.retrieval.dense import DenseStore
 from finrag.retrieval.embeddings import build_embedder
 from finrag.retrieval.hybrid import HybridRetriever
 from finrag.retrieval.rerank import build_reranker
+from finrag.retrieval.vectorstore import VectorStore
 
 
-def build_dense(settings: Settings | None = None) -> DenseStore:
+def build_vector_store(settings: Settings | None = None) -> VectorStore:
     s = settings or get_settings()
     embedder = build_embedder(s.embedding_provider, s.embedding_model)
-    return DenseStore(embedder, s.chroma_path, s.collection_name)
+    if s.vector_store == "pinecone":
+        from finrag.retrieval.pinecone_store import PineconeStore
+
+        return PineconeStore(
+            embedder, s.pinecone_index, s.pinecone_namespace, s.pinecone_cloud, s.pinecone_region
+        )
+    from finrag.retrieval.dense import ChromaStore
+
+    return ChromaStore(embedder, s.chroma_path, s.collection_name)
+
+
+# Nome antigo mantido por compatibilidade.
+build_dense = build_vector_store
+
+
+def build_retriever(settings: Settings | None = None) -> HybridRetriever:
+    s = settings or get_settings()
+    return HybridRetriever(
+        build_vector_store(s),
+        reranker=build_reranker(s.reranker, s.reranker_model),
+        candidates=s.candidates_per_retriever,
+    )
 
 
 def build_graph(settings: Settings | None = None) -> GraphStore | None:
@@ -27,9 +48,6 @@ def build_graph(settings: Settings | None = None) -> GraphStore | None:
 
 def build_agent(settings: Settings | None = None) -> FinRAGAgent:
     s = settings or get_settings()
-    retriever = HybridRetriever(
-        build_dense(s),
-        reranker=build_reranker(s.reranker, s.reranker_model),
-        candidates=s.candidates_per_retriever,
+    return FinRAGAgent(
+        build_llm(s), build_retriever(s), graph=build_graph(s), top_k=s.top_k, prices=s.llm_prices
     )
-    return FinRAGAgent(build_llm(s), retriever, graph=build_graph(s), top_k=s.top_k)

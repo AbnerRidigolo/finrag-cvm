@@ -2,21 +2,22 @@ from fastapi.testclient import TestClient
 
 from finrag.agent import FinRAGAgent, heuristic_route
 from finrag.api import create_app
-from finrag.llm import ExtractiveLLM
+from finrag.llm import Completion, ExtractiveLLM
 
 
 class FakeLLM:
     name = "fake"
+    model = "fake-model"
 
     def __init__(self, route_json: str) -> None:
         self.route_json = route_json
         self.prompts: list[str] = []
 
-    def complete(self, system: str, prompt: str) -> str:
+    def complete(self, system: str, prompt: str) -> Completion:
         if "classifica" in system:
-            return self.route_json
+            return Completion(self.route_json, self.name, self.model, 100, 20)
         self.prompts.append(prompt)
-        return "Resposta com citação [1]."
+        return Completion("Resposta com citação [1].", self.name, self.model, 1000, 50)
 
 
 class FakeGraph:
@@ -69,3 +70,29 @@ def test_api(retriever):
     assert response.status_code == 200
     assert response.json()["sources"]
     assert client.post("/ask", json={"question": ""}).status_code == 422
+
+
+def test_uso_latencia_e_custo_por_pergunta(retriever):
+    llm = FakeLLM('{"route": "normas", "intent": "", "entity": ""}')
+    agent = FinRAGAgent(llm, retriever, prices={"fake-model": [1.0, 10.0]})
+    usage = agent.ask("Qual a taxa de performance do Alpha?").usage
+    assert usage.llm_calls == 2
+    assert (usage.input_tokens, usage.output_tokens) == (1100, 70)
+    assert usage.cost_usd == round((1100 * 1.0 + 70 * 10.0) / 1e6, 6)
+    assert {"route", "retrieve", "generate"} <= set(usage.stage_latency_ms)
+    assert usage.latency_ms >= sum(usage.stage_latency_ms.values()) * 0.9
+
+
+def test_endpoint_de_metricas(retriever):
+    client = TestClient(create_app(FinRAGAgent(ExtractiveLLM(), retriever)))
+    client.post("/ask", json={"question": "O que é linha d'água?"})
+    body = client.get("/metrics/").text
+    assert "finrag_requests_total" in body
+    assert "finrag_stage_latency_seconds_bucket" in body
+
+
+def test_resposta_da_api_nao_expoe_contexto_interno(retriever):
+    client = TestClient(create_app(FinRAGAgent(ExtractiveLLM(), retriever)))
+    data = client.post("/ask", json={"question": "O que é linha d'água?"}).json()
+    assert "context" not in data and "text" not in data["sources"][0]
+    assert "latency_ms" in data["usage"]

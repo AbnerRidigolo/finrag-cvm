@@ -1,0 +1,69 @@
+from finrag.agent import FinRAGAgent
+from finrag.eval.answer_eval import judge_answer, run, summarize
+from finrag.eval.build_dataset import build_dataset, sample_chunks
+from finrag.llm import Completion, ExtractiveLLM
+from finrag.metrics import cost_usd
+from finrag.schemas import Answer
+
+
+class ScriptedLLM:
+    name = "scripted"
+    model = "scripted"
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+
+    def complete(self, system, prompt):
+        return Completion(self.replies.pop(0), self.name, self.model)
+
+
+def test_custo_por_milhao_de_tokens():
+    prices = {"m": [0.5, 2.0]}
+    assert cost_usd("m", 1_000_000, 500_000, prices) == 1.5
+    assert cost_usd("sem-preco", 10, 10, prices) is None
+
+
+def test_juiz_aceita_json_com_cerca_de_codigo():
+    judge = ScriptedLLM(['```json\n{"justificativa": "ok", "fidelidade": 5, "relevancia": 4}\n```'])
+    verdict = judge_answer(judge, Answer(question="q", answer="a", route="normas"))
+    assert (verdict["fidelidade"], verdict["relevancia"]) == (5, 4)
+
+
+def test_juiz_com_saida_invalida_nao_quebra():
+    verdict = judge_answer(ScriptedLLM(["nota 5"]), Answer(question="q", answer="a", route="n"))
+    assert verdict["fidelidade"] is None
+
+
+def test_avaliacao_de_respostas_ponta_a_ponta(retriever):
+    agent = FinRAGAgent(ExtractiveLLM(), retriever)
+    judge = ScriptedLLM(
+        [
+            '{"justificativa": "sustentada", "fidelidade": 5, "relevancia": 5}',
+            '{"justificativa": "inventou", "fidelidade": 2, "relevancia": 4}',
+        ]
+    )
+    dataset = [{"question": "O que é linha d'água?"}, {"question": "Qual o prazo do Beta?"}]
+    results = run(agent, judge, dataset)
+    summary = summarize(results)
+    assert summary["fidelidade_media"] == 3.5 and summary["pct_fieis"] == 0.5
+    assert all(r["sources"] for r in results)
+
+
+def test_juiz_recebe_o_contexto_recuperado(retriever):
+    agent = FinRAGAgent(ExtractiveLLM(), retriever)
+    answer = agent.ask("O que é linha d'água?")
+    assert "Linha d'água" in answer.context
+
+
+def test_amostragem_estratificada_por_documento(chunks):
+    sampled = sample_chunks(chunks, n=6, min_chars=50, seed=1)
+    assert len({c.source for c in sampled}) == 3
+    assert all(c.article for c in sampled)
+    assert sample_chunks(chunks, 6, 50, seed=1) == sampled
+
+
+def test_gera_dataset_e_descarta_skip(chunks):
+    llm = ScriptedLLM(['{"question": "Qual o prazo?"}', '{"question": "SKIP"}', "lixo"])
+    rows = build_dataset(llm, chunks, n=3, min_chars=50)
+    assert len(rows) == 1 and rows[0]["synthetic"]
+    assert rows[0]["relevant"][0]["article"]

@@ -1,6 +1,7 @@
 """API HTTP do FinRAG."""
 
 from fastapi import FastAPI
+from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
 from finrag.agent import FinRAGAgent
@@ -12,7 +13,8 @@ class Question(BaseModel):
 
 
 def create_app(agent: FinRAGAgent | None = None) -> FastAPI:
-    app = FastAPI(title="FinRAG CVM", version="0.1.0")
+    app = FastAPI(title="FinRAG CVM", version="0.2.0")
+    app.mount("/metrics", make_asgi_app())
     state: dict[str, FinRAGAgent] = {}
 
     def get_agent() -> FinRAGAgent:

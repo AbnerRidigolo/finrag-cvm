@@ -9,6 +9,7 @@ import hashlib
 import math
 from typing import Protocol
 
+from finrag.metrics import EMBEDDING_TOKENS
 from finrag.retrieval.text import tokenize
 
 
@@ -46,6 +47,8 @@ class OpenAIEmbedder:
             batch = texts[i : i + self.batch_size]
             response = self.client.embeddings.create(model=self.model, input=batch)
             vectors.extend(item.embedding for item in response.data)
+            if response.usage:
+                EMBEDDING_TOKENS.labels(self.model).inc(response.usage.total_tokens)
         return vectors
 
 
