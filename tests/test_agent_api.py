@@ -3,6 +3,10 @@ from fastapi.testclient import TestClient
 from finrag.agent import FinRAGAgent, heuristic_route
 from finrag.api import create_app
 from finrag.llm import Completion, ExtractiveLLM
+from finrag.retrieval.dense import DenseStore
+from finrag.retrieval.embeddings import HashingEmbedder
+from finrag.retrieval.hybrid import HybridRetriever
+from finrag.schemas import Chunk
 
 
 class FakeLLM:
@@ -100,8 +104,21 @@ def test_endpoint_de_metricas(retriever):
     assert "finrag_stage_latency_seconds_bucket" in body
 
 
-def test_resposta_da_api_nao_expoe_contexto_interno(retriever):
-    client = TestClient(create_app(FinRAGAgent(ExtractiveLLM(), retriever)))
-    data = client.post("/ask", json={"question": "O que é linha d'água?"}).json()
-    assert "context" not in data and "text" not in data["sources"][0]
+def test_resposta_da_api_traz_texto_das_fontes_mas_nao_o_contexto(chunks, tmp_path):
+    # Os trechos do corpus de exemplo têm menos de 300 caracteres, o tamanho do excerpt;
+    # um trecho longo mostra que a interface recebe o texto inteiro, e não o corte.
+    long_text = "Art. 30 A amortização extraordinária das cotas seniores ocorre " + "x " * 400
+    long_chunk = Chunk(
+        id="longo:0", text=long_text, source="longo.txt", article="Art.30", context="Longo"
+    )
+    dense = DenseStore(HashingEmbedder(), path=str(tmp_path / "chroma"), collection="longo")
+    dense.add([*chunks, long_chunk])
+    client = TestClient(create_app(FinRAGAgent(ExtractiveLLM(), HybridRetriever(dense))))
+
+    data = client.post("/ask", json={"question": "Como ocorre a amortização extraordinária?"})
+    data = data.json()
+    assert "context" not in data
+    source = next(s for s in data["sources"] if s["id"] == "longo:0")
+    assert source["text"] == long_text
+    assert len(source["excerpt"]) == 300 and source["title"] == "Longo"
     assert "latency_ms" in data["usage"]
