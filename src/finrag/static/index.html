@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>FinRAG CVM</title>
+<meta name="description" content="Perguntas sobre fundos de investimento respondidas com a Resolução CVM 175 e regulamentos de FIDC, citando o artigo de cada afirmação.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b6b5f'/%3E%3Cpath d='M12 9H9v14h3M20 9h3v14h-3' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='2.2' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --surface: #ffffff;
+    --surface-2: #efede7;
+    --ink: #17181b;
+    --ink-2: #464a52;
+    --ink-3: #63676f;
+    --line: #e1ded6;
+    --line-strong: #cfcbc1;
+    --accent: #0b6b5f;
+    --accent-ink: #07564c;
+    --accent-soft: #dcede8;
+    --on-accent: #ffffff;
+    --danger: #a3261b;
+    --danger-soft: #fbeae8;
+    --focus: #1f6feb;
+    --shadow: 0 1px 2px rgb(20 20 20 / 0.04), 0 8px 24px rgb(20 20 20 / 0.06);
+    --shadow-panel: -12px 0 40px rgb(20 20 20 / 0.10);
+
+    --sans: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Charter", "Iowan Old Style", "Source Serif Pro", Georgia, Cambria, "Times New Roman", serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+
+    --col: 760px;
+    --panel-w: 460px;
+    --header-h: 64px;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111315;
+      --surface: #181b1e;
+      --surface-2: #202428;
+      --ink: #ecebe6;
+      --ink-2: #bfc2c8;
+      --ink-3: #9a9ea6;
+      --line: #2a2e33;
+      --line-strong: #3a3f45;
+      --accent: #4fc1ad;
+      --accent-ink: #86d9ca;
+      --accent-soft: #163a34;
+      --on-accent: #07201c;
+      --danger: #f08a7e;
+      --danger-soft: #3a1c19;
+      --focus: #79b8ff;
+      --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
+      --shadow-panel: -12px 0 40px rgb(0 0 0 / 0.45);
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+  [tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .skip {
+    position: absolute; left: 12px; top: 12px; z-index: 50;
+    background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 8px;
+    transform: translateY(-200%);
+  }
+  .skip:focus { transform: none; box-shadow: var(--shadow); }
+
+  /* ---------- Cabeçalho ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    height: var(--header-h);
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 24px;
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px);
+    -webkit-backdrop-filter: saturate(1.4) blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand svg { flex: none; }
+  .brand h1 { margin: 0; font-size: 17px; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+  .brand p {
+    margin: 2px 0 0; font-size: 13px; line-height: 1.3; color: var(--ink-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .topbar .spacer { flex: 1; }
+  .toplink {
+    font-size: 13px; color: var(--ink-2); text-decoration: none;
+    padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap;
+  }
+  .toplink:hover { border-color: var(--line-strong); color: var(--ink); }
+
+  /* ---------- Coluna principal ---------- */
+  .shell {
+    max-width: calc(var(--col) + 48px);
+    margin: 0 auto;
+    padding: 0 24px 200px;
+    transition: margin-right .28s ease;
+  }
+
+  /* Estado inicial */
+  .intro { padding: 72px 0 24px; }
+  .eyebrow {
+    margin: 0 0 14px; font-size: 12px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--accent-ink);
+  }
+  .intro h2 {
+    margin: 0; font-family: var(--serif); font-weight: 500;
+    font-size: clamp(28px, 4.2vw, 40px); line-height: 1.15; letter-spacing: -0.015em;
+    max-width: 22ch;
+  }
+  .lede { margin: 18px 0 0; max-width: 60ch; color: var(--ink-2); font-size: 17px; }
+  .lede .cite { pointer-events: none; }
+  .examples-label {
+    margin: 44px 0 12px; font-size: 13px; font-weight: 600; color: var(--ink-3);
+  }
+  .examples {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+    list-style: none; margin: 0; padding: 0;
+  }
+  .example {
+    display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%;
+    text-align: left; padding: 16px 18px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    transition: border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .example:hover:not(:disabled) { border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-1px); }
+  .example .tag {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .example .tag b { color: var(--accent-ink); font-weight: 600; }
+  .example .text { font-size: 15px; line-height: 1.45; color: var(--ink); }
+
+  /* ---------- Conversa ---------- */
+  .thread { list-style: none; margin: 0; padding: 0; }
+  .turn {
+    padding: 40px 0 36px;
+    border-bottom: 1px solid var(--line);
+    scroll-margin-top: calc(var(--header-h) + 8px);
+  }
+  .turn:first-child { padding-top: 48px; }
+  .q-label, .section-label {
+    display: block; margin-bottom: 6px;
+    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .q-text {
+    margin: 0; font-family: var(--serif); font-size: 24px; line-height: 1.3; font-weight: 500;
+    letter-spacing: -0.01em; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .answer { margin-top: 22px; }
+  .answer-text { font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; }
+  .answer-text p { margin: 0 0 12px; }
+  .answer-text ul, .answer-text ol { margin: 0 0 12px; padding-left: 22px; }
+  .answer-text li { margin: 4px 0; }
+  .answer-text strong { font-weight: 650; }
+
+  /* Citação [n]: o destaque da interface */
+  .cite {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.55em; height: 1.35em; padding: 0 .35em; margin: 0 1px;
+    font: 600 12.5px/1 var(--mono);
+    vertical-align: .12em;
+    color: var(--accent-ink); background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 6px;
+    transition: background .12s, color .12s;
+  }
+  button.cite:hover, button.cite.is-hot, button.cite[aria-expanded="true"] {
+    background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+  }
+  span.cite { opacity: .7; }
+
+  /* Fontes */
+  .sources { margin-top: 26px; }
+  .sources ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .src {
+    width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+    text-align: left; padding: 12px 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .src:hover, .src.is-hot { border-color: var(--accent); box-shadow: var(--shadow); }
+  .src[aria-expanded="true"] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface));
+  }
+  .src-n {
+    width: 32px; height: 32px; display: grid; place-items: center;
+    font: 600 14px/1 var(--mono); color: var(--accent-ink);
+    background: var(--accent-soft); border-radius: 8px;
+  }
+  .src-body { min-width: 0; display: grid; gap: 2px; }
+  .src-eyebrow { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src-title {
+    font-family: var(--serif); font-size: 16px; line-height: 1.3; color: var(--ink);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .src-meta { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; }
+  .art {
+    flex: none; font: 600 12px/1.2 var(--mono); color: var(--ink);
+    padding: 3px 7px; border-radius: 5px; background: var(--surface-2);
+  }
+  .file { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src-score { text-align: right; font: 500 13px/1.2 var(--mono); color: var(--ink-2); }
+  .src-score small {
+    display: block; font: 600 10.5px/1.4 var(--sans); letter-spacing: .06em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+
+  /* Métricas */
+  .metrics {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    margin-top: 18px; font: 12.5px/1.5 var(--mono); color: var(--ink-3);
+  }
+  .metrics .m { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .metrics svg { opacity: .8; }
+  .route {
+    font: 600 11.5px/1 var(--sans); letter-spacing: .05em; text-transform: uppercase;
+    padding: 5px 8px; border-radius: 999px;
+    color: var(--accent-ink); background: var(--accent-soft);
+  }
+  .route.fundos { color: #7a4b00; background: #fbecd0; }
+  @media (prefers-color-scheme: dark) { .route.fundos { color: #f3c37a; background: #3a2a10; } }
+  .stages { color: var(--ink-3); }
+
+  /* Carregamento */
+  .loading { margin-top: 22px; }
+  .status {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 15px; color: var(--ink-2);
+  }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .dots i:nth-child(2) { animation-delay: .15s; }
+  .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  .status .msg { transition: opacity .25s; }
+  .status .msg.fade { opacity: 0; }
+  .status .elapsed { margin-left: auto; font: 13px var(--mono); color: var(--ink-3); }
+  .skeleton { margin-top: 16px; display: grid; gap: 10px; }
+  .skeleton span {
+    height: 12px; border-radius: 6px;
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--line) 50%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite linear;
+  }
+  .skeleton span:nth-child(1) { width: 96%; }
+  .skeleton span:nth-child(2) { width: 88%; }
+  .skeleton span:nth-child(3) { width: 62%; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+  /* Erro */
+  .error {
+    margin-top: 22px; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+    padding: 14px 16px; border-radius: var(--radius);
+    background: var(--danger-soft); color: var(--ink);
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  }
+  .error svg { grid-row: span 2; color: var(--danger); margin-top: 2px; }
+  .error strong { font-weight: 650; }
+  .error p { margin: 0; color: var(--ink-2); font-size: 15px; }
+  .error button {
+    grid-column: 2; justify-self: start; margin-top: 8px;
+    padding: 6px 12px; border-radius: 8px; font-size: 14px;
+    background: var(--surface); border: 1px solid var(--line-strong);
+  }
+  .error button:hover { border-color: var(--ink-3); }
+
+  /* ---------- Campo de pergunta ---------- */
+  .composer-wrap {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+    padding: 20px 24px 18px;
+    background: linear-gradient(to top, var(--bg) 70%, color-mix(in srgb, var(--bg) 0%, transparent));
+    transition: right .28s ease;
+  }
+  .composer {
+    max-width: var(--col); margin: 0 auto;
+    display: flex; align-items: flex-end; gap: 10px;
+    padding: 10px 10px 10px 18px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+  .composer:focus-within { border-color: var(--accent); }
+  .composer textarea {
+    flex: 1; resize: none; border: 0; outline: 0; background: transparent;
+    font-size: 16px; line-height: 1.5; padding: 7px 0; max-height: 180px; min-height: 24px;
+  }
+  .composer textarea::placeholder { color: var(--ink-3); }
+  .send {
+    flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+    border: 0; border-radius: 11px; background: var(--accent); color: var(--on-accent);
+    transition: opacity .15s, transform .15s;
+  }
+  .send:hover:not(:disabled) { transform: translateY(-1px); }
+  .send:disabled { opacity: .35; }
+  .send .spin { display: none; }
+  .send[aria-busy="true"] { opacity: .75; }
+  .send[aria-busy="true"] .arrow { display: none; }
+  .send[aria-busy="true"] .spin { display: block; animation: rot .9s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .hint {
+    max-width: var(--col); margin: 8px auto 0; padding: 0 4px;
+    display: flex; justify-content: space-between; gap: 12px;
+    font-size: 12px; color: var(--ink-3);
+  }
+  kbd {
+    font: 11px var(--mono); padding: 1px 5px; border-radius: 4px;
+    border: 1px solid var(--line-strong); background: var(--surface);
+  }
+
+  /* ---------- Painel da fonte ---------- */
+  .scrim {
+    position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .35);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .panel {
+    position: fixed; z-index: 40; top: 0; right: 0; bottom: 0;
+    width: var(--panel-w); max-width: 100%;
+    display: flex; flex-direction: column;
+    background: var(--surface); border-left: 1px solid var(--line);
+    box-shadow: var(--shadow-panel);
+    transform: translateX(100%); visibility: hidden;
+    transition: transform .28s ease, visibility 0s linear .28s;
+  }
+  body.panel-open .panel { transform: none; visibility: visible; transition: transform .28s ease; }
+  .panel-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 16px 14px 24px; border-bottom: 1px solid var(--line);
+  }
+  .panel-kicker { font: 600 12px/1 var(--mono); color: var(--accent-ink); letter-spacing: .02em; }
+  .panel-head .spacer { flex: 1; }
+  .icon-btn {
+    width: 34px; height: 34px; display: grid; place-items: center;
+    border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--ink-2);
+  }
+  .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+  .icon-btn:disabled { opacity: .3; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 26px 28px 32px; overscroll-behavior: contain; }
+  .doc-eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--ink-3); }
+  .doc-title {
+    margin: 0; font-family: var(--serif); font-weight: 500; font-size: 23px; line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+  .doc-meta {
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 14px;
+    margin: 18px 0 0; padding: 14px 0; font-size: 13px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .doc-meta dt { color: var(--ink-3); }
+  .doc-meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .doc-meta dd.mono { font-family: var(--mono); font-size: 12.5px; }
+  .doc-text {
+    margin-top: 22px; font-family: var(--serif); font-size: 17px; line-height: 1.72;
+    overflow-wrap: anywhere; hyphens: auto;
+  }
+  .doc-text p { margin: 0 0 14px; }
+  .doc-text strong { font-weight: 650; }
+  .panel-foot {
+    padding: 12px 24px; border-top: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-3);
+  }
+
+  /* Tela larga: o painel empurra a conversa em vez de cobri-la */
+  @media (min-width: 1100px) {
+    body.panel-open .shell { margin-right: var(--panel-w); }
+    body.panel-open .composer-wrap { right: var(--panel-w); }
+    body.panel-open .shell { margin-left: max(24px, calc((100vw - var(--panel-w) - var(--col) - 48px) / 2)); }
+  }
+
+  /* Celular: painel inferior */
+  @media (max-width: 760px) {
+    :root { --header-h: 58px; }
+    .topbar { padding: 0 16px; }
+    .brand p { display: none; }
+    .toplink { display: none; }
+    .shell { padding: 0 16px 190px; }
+    .intro { padding-top: 40px; }
+    .lede { font-size: 16px; }
+    .examples { grid-template-columns: 1fr; }
+    .q-text { font-size: 21px; }
+    .answer-text { font-size: 16px; }
+    .src { grid-template-columns: auto 1fr; }
+    .src-score { grid-column: 2; text-align: left; }
+    .src-score small { display: inline; margin-right: 6px; }
+    .composer-wrap { padding: 14px 12px 12px; }
+    .hint .keys, .panel-foot .keys { display: none; }
+    .panel {
+      top: auto; left: 0; width: 100%; max-height: 82vh;
+      border-left: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+      transform: translateY(100%);
+      box-shadow: 0 -12px 40px rgb(0 0 0 / .2);
+    }
+    .panel-head::before {
+      content: ""; position: absolute; left: 50%; top: 6px; width: 40px; height: 4px;
+      margin-left: -20px; border-radius: 2px; background: var(--line-strong);
+    }
+    .panel-body { padding: 20px 20px 28px; }
+    body.panel-open .scrim { opacity: 1; pointer-events: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#question">Pular para o campo de pergunta</a>
+
+<header class="topbar">
+  <div class="brand">
+    <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="var(--accent)"/>
+      <path d="M12 9H9v14h3M20 9h3v14h-3" fill="none" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="16" cy="16" r="2.2" fill="var(--on-accent)"/>
+    </svg>
+    <div>
+      <h1>FinRAG CVM</h1>
+      <p>Respostas sobre fundos de investimento com a fonte de cada afirmação: documento e artigo.</p>
+    </div>
+  </div>
+  <span class="spacer"></span>
+  <a class="toplink" href="docs">Documentação da API</a>
+</header>
+
+<main class="shell" id="main">
+  <section class="intro" id="intro" aria-labelledby="intro-title">
+    <p class="eyebrow">Resolução CVM 175 · regulamentos de FIDC</p>
+    <h2 id="intro-title">Pergunte sobre fundos. Cada resposta mostra o artigo de onde saiu.</h2>
+    <p class="lede">
+      Busca híbrida com re-ranking na Resolução CVM 175 e seus anexos e em três regulamentos de FIDC.
+      Clique numa citação <span class="cite" aria-hidden="true">1</span> para ler o trecho original,
+      e veja a latência e o custo de cada resposta.
+    </p>
+    <p class="examples-label" id="examples-label">Experimente uma destas perguntas</p>
+    <ul class="examples" id="examples" aria-labelledby="examples-label"></ul>
+  </section>
+
+  <ol class="thread" id="thread" aria-label="Perguntas desta sessão"></ol>
+</main>
+
+<div class="composer-wrap">
+  <form class="composer" id="composer" autocomplete="off">
+    <label for="question" class="sr-only">Sua pergunta</label>
+    <textarea id="question" rows="1" maxlength="1000"
+      placeholder="Pergunte sobre a Resolução CVM 175 ou os regulamentos de FIDC…"></textarea>
+    <button class="send" id="send" type="submit" aria-label="Enviar pergunta" disabled>
+      <svg class="arrow" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="spin" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </button>
+  </form>
+  <div class="hint">
+    <span class="keys"><kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra a linha</span>
+    <span>Respostas geradas a partir dos documentos indexados. Confira sempre a fonte.</span>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" role="dialog" aria-modal="false" aria-labelledby="panel-title" aria-hidden="true">
+  <div class="panel-head">
+    <span class="panel-kicker" id="panel-kicker"></span>
+    <span class="spacer"></span>
+    <button class="icon-btn" id="panel-prev" type="button" aria-label="Fonte anterior">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="icon-btn" id="panel-next" type="button" aria-label="Próxima fonte">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="icon-btn" id="panel-close" type="button" aria-label="Fechar painel da fonte (Esc)">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="panel-body">
+    <p class="doc-eyebrow" id="panel-eyebrow"></p>
+    <h2 class="doc-title" id="panel-title" tabindex="-1"></h2>
+    <dl class="doc-meta">
+      <dt>Artigo</dt><dd class="mono" id="panel-article"></dd>
+      <dt>Arquivo</dt><dd class="mono" id="panel-file"></dd>
+      <dt>Score</dt><dd class="mono" id="panel-score"></dd>
+    </dl>
+    <div class="doc-text" id="panel-text"></div>
+  </div>
+  <div class="panel-foot">Trecho recuperado pela busca e enviado como contexto para gerar a resposta.<span class="keys"> <kbd>Esc</kbd> fecha · <kbd>←</kbd> <kbd>→</kbd> navegam.</span></div>
+</aside>
+
+<div class="sr-only" id="announcer" aria-live="polite"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // Escolhidas em data/eval/cvm_questions.jsonl entre as que tiveram o gabarito recuperado e
+  // nota 5 de fidelidade e de relevância em data/eval/results/answer_eval.jsonl.
+  const EXAMPLES = [
+    { doc: "Resolução 175", where: "Anexo X · Ficart",
+      q: "Que tipo de investimento caracteriza os fundos chamados Ficart?" },
+    { doc: "Regulamento", where: "Croma FIDC",
+      q: "No Croma FIDC, a taxa de administração pode ser reduzida sem aprovação dos cotistas? E o que é necessário para aumentá-la?" },
+    { doc: "Resolução 175", where: "Anexo IX · FMAI",
+      q: "Em que condições a classe de cotas do FMAI pode passar do regime fechado para o aberto?" },
+    { doc: "Resolução 175", where: "Anexo V · Fundo de Índice",
+      q: "Com que frequência devem ser atualizadas as informações sobre a composição da carteira do Fundo de Índice?" },
+  ];
+
+  // Mensagens de espera, não etapas medidas: o /ask só responde no fim.
+  const WAIT_MESSAGES = [
+    "Entendendo a pergunta…",
+    "Buscando nos documentos…",
+    "Reordenando os trechos…",
+    "Escrevendo a resposta…",
+  ];
+  const STAGE_NAMES = { route: "roteador", retrieve: "busca", graph: "grafo", generate: "geração" };
+  const TIMEOUT_MS = 180000;
+  const MIN_CHARS = 3;
+
+  const $ = (id) => document.getElementById(id);
+  const intro = $("intro"), thread = $("thread"), form = $("composer"), input = $("question");
+  const sendBtn = $("send"), announcer = $("announcer");
+  const panel = $("panel"), scrim = $("scrim");
+
+  const turns = [];          // { question, data, el }
+  let busy = false;
+  let open = null;           // { turn, index, opener }
+
+  const nf = (digits) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const fmtSeconds = (ms) => (ms < 1000 ? `${Math.round(ms)} ms` : `${nf(1).format(ms / 1000)} s`);
+  const fmtInt = (n) => new Intl.NumberFormat("pt-BR").format(n);
+  const fmtUsd = (v) => "US$ " + new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2, maximumFractionDigits: v > 0 && v < 0.01 ? 6 : 4,
+  }).format(v);
+  const fmtScore = (v) => nf(3).format(v);
+
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v === true ? "" : v);
+    }
+    for (const c of children.flat()) {
+      if (c === null || c === undefined || c === false) continue;
+      node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return node;
+  }
+
+  const svg = (d, size = 14) => {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("width", size); s.setAttribute("height", size);
+    s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
+    s.innerHTML = d;
+    return s;
+  };
+  const ICON_CLOCK = '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+  const ICON_ALERT = '<path d="M12 3l10 18H2L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+
+  // "Resolução CVM nº 175 – Anexo Normativo X – Ficart" -> ["Resolução CVM nº 175", "Anexo Normativo X – Ficart"]
+  function splitTitle(src) {
+    const title = (src.title || src.source || "").trim();
+    const i = title.indexOf(" – ");
+    return i > 0 ? [title.slice(0, i), title.slice(i + 3)] : ["", title];
+  }
+  const fmtArticle = (a) => (a || "").replace(/^(Art\.)(?=\S)/, "$1 ").trim();
+  // Destaca o rótulo do dispositivo no início do parágrafo: "Art. 4º", "Artigo 40º", "§ 2º".
+  const LABEL_RE = /^(?:Art(?:igo)?\.?\s*\d+(?:-[A-Z])?[º°o]?|Cláusula\s+\d+(?:\.\d+)*[º°]?|§\s*\d+[º°]?|Parágrafo\s+(?:\d+[º°]?|[A-ZÀ-Ú][a-zà-ú]+))\.?(?=\s)/;
+  function paragraph(text) {
+    const m = text.match(LABEL_RE);
+    return m ? el("p", {}, el("strong", {}, m[0]), text.slice(m[0].length)) : el("p", {}, text);
+  }
+
+  // O texto vem do PDF com quebras de linha rígidas: junta as linhas de cada parágrafo.
+  // É só exibição; o texto do trecho na API não muda.
+  function reflow(text) {
+    return (text || "")
+      .replace(//g, "•")
+      .split(/\n[ \t]*\n/)
+      .map((p) => p.replace(/\s*\n\s*/g, " ").replace(/[ \t]{2,}/g, " ").trim())
+      .filter(Boolean);
+  }
+
+  // ---------- Resposta: markdown mínimo e citações clicáveis ----------
+  const CITE_RE = /\[(\d+(?:\s*[,–-]\s*\d+)*)\]/g;
+
+  function expandCite(group) {
+    const out = [];
+    for (const part of group.split(",")) {
+      const [a, b] = part.split(/[–-]/).map((x) => parseInt(x, 10));
+      if (b && b > a && b - a < 20) for (let n = a; n <= b; n++) out.push(n);
+      else out.push(a);
+    }
+    return out;
+  }
+
+  function inline(text, turn) {
+    const nodes = [];
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    for (const part of parts) {
+      if (!part) continue;
+      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+        nodes.push(el("strong", {}, inline(part.slice(2, -2), turn)));
+        continue;
+      }
+      let last = 0;
+      for (const m of part.matchAll(CITE_RE)) {
+        if (m.index > last) nodes.push(document.createTextNode(part.slice(last, m.index)));
+        for (const n of expandCite(m[1])) nodes.push(citeNode(n, turn));
+        last = m.index + m[0].length;
+      }
+      if (last < part.length) nodes.push(document.createTextNode(part.slice(last)));
+    }
+    return nodes;
+  }
+
+  function citeNode(n, turn) {
+    const src = turn.data.sources[n - 1];
+    if (!src) return el("span", { class: "cite", title: `Referência ${n} do contexto` }, String(n));
+    const [, main] = splitTitle(src);
+    const btn = el("button", {
+      type: "button", class: "cite", "data-i": n - 1, "aria-expanded": "false",
+      "aria-label": `Fonte ${n}: ${main}${src.article ? ", " + fmtArticle(src.article) : ""}`,
+      onclick: (e) => openPanel(turn, n - 1, e.currentTarget),
+      onmouseenter: () => hot(turn, n - 1, true),
+      onmouseleave: () => hot(turn, n - 1, false),
+      onfocus: () => hot(turn, n - 1, true),
+      onblur: () => hot(turn, n - 1, false),
+    }, String(n));
+    return btn;
+  }
+
+  function renderAnswerText(answer, turn) {
+    const root = el("div", { class: "answer-text" });
+    const blocks = answer.replace(/\r\n/g, "\n").trim().split(/\n\s*\n/);
+    for (const block of blocks) {
+      const lines = block.split("\n").filter((l) => l.trim());
+      if (!lines.length) continue;
+      const bullet = /^\s*[-*•]\s+/, numbered = /^\s*\d+[.)]\s+/;
+      if (lines.every((l) => bullet.test(l)) || lines.every((l) => numbered.test(l))) {
+        const ordered = numbered.test(lines[0]);
+        root.append(el(ordered ? "ol" : "ul", {},
+          lines.map((l) => el("li", {}, inline(l.replace(ordered ? numbered : bullet, ""), turn)))));
+        continue;
+      }
+      const p = el("p");
+      lines.forEach((line, i) => {
+        if (i) p.append(el("br"));
+        const item = line.match(bullet) ? "• " + line.replace(bullet, "") : line;
+        p.append(...inline(item, turn));
+      });
+      root.append(p);
+    }
+    return root;
+  }
+
+  // ---------- Fontes e métricas ----------
+  function renderSources(turn) {
+    const sources = turn.data.sources;
+    if (!sources.length) return null;
+    return el("section", { class: "sources", "aria-label": "Fontes consultadas" },
+      el("span", { class: "section-label" }, `Fontes consultadas · ${sources.length}`),
+      el("ol", {}, sources.map((src, i) => {
+        const [eyebrow, main] = splitTitle(src);
+        return el("li", {}, el("button", {
+          type: "button", class: "src", "data-i": i, "aria-expanded": "false",
+          onclick: (e) => openPanel(turn, i, e.currentTarget),
+          onmouseenter: () => hot(turn, i, true),
+          onmouseleave: () => hot(turn, i, false),
+        },
+          el("span", { class: "src-n", "aria-hidden": "true" }, String(i + 1)),
+          el("span", { class: "src-body" },
+            eyebrow ? el("span", { class: "src-eyebrow" }, eyebrow) : null,
+            el("span", { class: "src-title" }, el("span", { class: "sr-only" }, `Fonte ${i + 1}: `), main),
+            el("span", { class: "src-meta" },
+              src.article ? el("span", { class: "art" }, fmtArticle(src.article)) : null,
+              el("span", { class: "file" }, src.source)),
+          ),
+          el("span", { class: "src-score" }, el("small", {}, "score"), fmtScore(src.score)),
+        ));
+      })),
+    );
+  }
+
+  function renderMetrics(data) {
+    const u = data.usage || {};
+    const stages = Object.entries(u.stage_latency_ms || {})
+      .map(([k, v]) => `${STAGE_NAMES[k] || k} ${fmtSeconds(v)}`).join(" · ");
+    const route = data.route === "fundos" ? "fundos" : "normas";
+    const routeTitle = route === "fundos"
+      ? "Rota: grafo de fundos (Neo4j)" : "Rota: documentos (busca híbrida)";
+    const free = !u.input_tokens && !u.output_tokens;
+    return el("footer", { class: "metrics", "aria-label": "Métricas da resposta" },
+      el("span", { class: `route ${route}`, title: routeTitle }, route),
+      el("span", { class: "m", title: "Latência total no servidor" },
+        svg(ICON_CLOCK, 13), el("span", { class: "sr-only" }, "Latência total: "), fmtSeconds(u.latency_ms || 0)),
+      stages ? el("span", { class: "m stages", title: "Latência por etapa" }, stages) : null,
+      el("span", { class: "m", title: free ? "Modo offline: nenhum LLM pago foi chamado" : "Tokens de entrada + saída" },
+        free ? "0 tokens" : `${fmtInt(u.input_tokens)} + ${fmtInt(u.output_tokens)} tokens`),
+      el("span", { class: "m", title: "Custo estimado das chamadas ao LLM" }, fmtUsd(u.cost_usd || 0)),
+    );
+  }
+
+  function hot(turn, i, on) {
+    turn.el.querySelectorAll(`[data-i="${i}"]`).forEach((n) => n.classList.toggle("is-hot", on));
+  }
+
+  // ---------- Painel da fonte ----------
+  function openPanel(turn, index, opener) {
+    const src = turn.data.sources[index];
+    if (!src) return;
+    if (open) setExpanded(open.turn, open.index, false);
+    const first = !open;
+    open = { turn, index, opener: first ? opener : open.opener };
+    const [eyebrow, main] = splitTitle(src);
+    $("panel-kicker").textContent = `FONTE [${index + 1}] DE ${turn.data.sources.length}`;
+    $("panel-eyebrow").textContent = eyebrow;
+    $("panel-eyebrow").hidden = !eyebrow;
+    $("panel-title").textContent = main;
+    $("panel-article").textContent = fmtArticle(src.article) || "—";
+    $("panel-file").textContent = src.source;
+    $("panel-score").textContent = fmtScore(src.score);
+    const body = $("panel-text");
+    body.replaceChildren(...reflow(src.text || src.excerpt).map(paragraph));
+    panel.querySelector(".panel-body").scrollTop = 0;
+    $("panel-prev").disabled = index === 0;
+    $("panel-next").disabled = index === turn.data.sources.length - 1;
+    setExpanded(turn, index, true);
+    panel.setAttribute("aria-hidden", "false");
+    document.body.classList.add("panel-open");
+    $("panel-title").focus({ preventScroll: true });
+  }
+
+  function closePanel() {
+    if (!open) return;
+    setExpanded(open.turn, open.index, false);
+    const opener = open.opener;
+    open = null;
+    document.body.classList.remove("panel-open");
+    panel.setAttribute("aria-hidden", "true");
+    if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
+  }
+
+  function setExpanded(turn, i, on) {
+    turn.el.querySelectorAll(`[data-i="${i}"]`)
+      .forEach((n) => n.setAttribute("aria-expanded", on ? "true" : "false"));
+  }
+
+  const step = (d) => {
+    if (!open) return;
+    const next = open.index + d;
+    if (next >= 0 && next < open.turn.data.sources.length) openPanel(open.turn, next, null);
+  };
+
+  $("panel-close").addEventListener("click", closePanel);
+  $("panel-prev").addEventListener("click", () => step(-1));
+  $("panel-next").addEventListener("click", () => step(1));
+  scrim.addEventListener("click", closePanel);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && open) { e.preventDefault(); closePanel(); return; }
+    if (open && panel.contains(document.activeElement)) {
+      if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+      if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
+    }
+  });
+
+  // ---------- Envio da pergunta ----------
+  function setBusy(on) {
+    busy = on;
+    sendBtn.setAttribute("aria-busy", on ? "true" : "false");
+    sendBtn.setAttribute("aria-label", on ? "Respondendo…" : "Enviar pergunta");
+    document.querySelectorAll(".example").forEach((b) => (b.disabled = on));
+    updateSend();
+  }
+
+  function updateSend() {
+    sendBtn.disabled = busy || input.value.trim().length < MIN_CHARS;
+  }
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  }
+
+  function loadingNode() {
+    const msg = el("span", { class: "msg" }, WAIT_MESSAGES[0]);
+    const elapsed = el("span", { class: "elapsed", "aria-hidden": "true" }, "0,0 s");
+    const node = el("div", { class: "loading" },
+      el("div", { class: "status", role: "status" },
+        el("span", { class: "dots", "aria-hidden": "true" }, el("i"), el("i"), el("i")), msg, elapsed),
+      el("div", { class: "skeleton", "aria-hidden": "true" }, el("span"), el("span"), el("span")),
+    );
+    const t0 = performance.now();
+    let k = 0;
+    const tick = setInterval(() => { elapsed.textContent = `${nf(1).format((performance.now() - t0) / 1000)} s`; }, 100);
+    const rotate = setInterval(() => {
+      if (k >= WAIT_MESSAGES.length - 1) return;
+      msg.classList.add("fade");
+      setTimeout(() => { msg.textContent = WAIT_MESSAGES[++k]; msg.classList.remove("fade"); }, 250);
+    }, 1700);
+    node.stop = () => { clearInterval(tick); clearInterval(rotate); };
+    return node;
+  }
+
+  function errorNode(title, detail, retry) {
+    return el("div", { class: "error", role: "alert" },
+      svg(ICON_ALERT, 20),
+      el("strong", {}, title),
+      el("p", {}, detail),
+      retry ? el("button", { type: "button", onclick: retry }, "Tentar de novo") : null,
+    );
+  }
+
+  function describeError(err, status) {
+    if (err && err.name === "AbortError")
+      return ["A API demorou demais para responder.", "Nenhuma resposta em 3 minutos. Verifique o log do servidor e tente de novo."];
+    if (status === 422)
+      return ["A pergunta não foi aceita.", "Ela precisa ter entre 3 e 1.000 caracteres."];
+    if (status >= 500)
+      return ["A API encontrou um erro ao responder.", `O servidor devolveu HTTP ${status}. O detalhe está no log do servidor.`];
+    if (status)
+      return ["A API recusou a pergunta.", `O servidor devolveu HTTP ${status}.`];
+    if (err && err.message === "formato")
+      return ["A resposta da API veio num formato inesperado.", "Confira se a página e a API são da mesma versão."];
+    return ["Não foi possível falar com a API.", "Confira se o servidor está rodando (uvicorn finrag.api:app) e tente de novo."];
+  }
+
+  async function ask(question) {
+    question = question.trim();
+    if (busy || question.length < MIN_CHARS) return;
+    intro.hidden = true;
+    const turn = { question, data: null, el: null };
+    const answerBox = el("div", { class: "answer" });
+    turn.el = el("li", { class: "turn" },
+      el("span", { class: "q-label" }, "Pergunta"),
+      el("p", { class: "q-text" }, question),
+      answerBox);
+    thread.append(turn.el);
+    turns.push(turn);
+    run(turn, answerBox);
+  }
+
+  async function run(turn, answerBox) {
+    setBusy(true);
+    const loading = loadingNode();
+    answerBox.replaceChildren(loading);
+    turn.el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    announcer.textContent = "Buscando a resposta.";
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let status = 0;
+    try {
+      const res = await fetch("ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ question: turn.question }),
+        signal: controller.signal,
+      });
+      status = res.ok ? 0 : res.status;
+      if (!res.ok) throw new Error("http");
+      const data = await res.json().catch(() => { throw new Error("formato"); });
+      if (typeof data.answer !== "string") throw new Error("formato");
+      data.sources = Array.isArray(data.sources) ? data.sources : [];
+      turn.data = data;
+      answerBox.replaceChildren(
+        renderAnswerText(data.answer || "(resposta vazia)", turn),
+        ...[renderSources(turn), renderMetrics(data)].filter(Boolean),
+      );
+      announcer.textContent = `Resposta pronta, com ${data.sources.length} fontes.`;
+    } catch (err) {
+      const [title, detail] = describeError(err, status);
+      answerBox.replaceChildren(errorNode(title, detail, status === 422 ? null : () => run(turn, answerBox)));
+      announcer.textContent = title;
+    } finally {
+      clearTimeout(timer);
+      loading.stop();
+      setBusy(false);
+    }
+  }
+
+  // ---------- Eventos ----------
+  const examples = $("examples");
+  for (const ex of EXAMPLES) {
+    examples.append(el("li", {}, el("button", {
+      type: "button", class: "example", onclick: () => ask(ex.q),
+    },
+      el("span", { class: "tag" }, el("b", {}, ex.doc), ` · ${ex.where}`),
+      el("span", { class: "text" }, ex.q),
+    )));
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (busy || input.value.trim().length < MIN_CHARS) return;
+    const q = input.value;
+    input.value = "";
+    autosize();
+    updateSend();
+    ask(q);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  input.addEventListener("input", () => { autosize(); updateSend(); });
+  updateSend();
+})();
+</script>
+</body>
+</html>

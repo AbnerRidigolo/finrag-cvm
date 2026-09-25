@@ -35,7 +35,7 @@ class Source(BaseModel):
     article: str
     excerpt: str
     score: float
-    text: str = Field(default="", exclude=True, description="Texto completo, usado pelo juiz")
+    text: str = Field(default="", description="Texto completo do trecho (juiz e interface)")
 
 
 class Usage(BaseModel):

@@ -33,6 +33,8 @@ flowchart LR
     B --> H
     G --> T
     L --> API[FastAPI /ask]
+    UI[Interface web<br/>GET /] -- POST /ask --> API
+    API -- resposta, fontes e custo --> UI
     API --> M["/metrics"] --> P[(Prometheus)] --> GF[Grafana]
 ```
 
@@ -89,6 +91,21 @@ Art. 4º A taxa de administração é de 1,2% ao ano sobre o patrimônio líquid
 
 Toda resposta traz latência por etapa, tokens e custo estimado (no modo offline, zero).
 
+## Interface
+
+A própria API serve uma página de perguntas em http://localhost:8000/. Cada citação `[n]` da resposta é clicável e abre o trecho original, com o título do documento e o artigo; abaixo da resposta ficam as fontes consultadas, com o score, e uma linha com a rota, a latência total e por etapa, os tokens e o custo.
+
+<!-- TODO: gravar o GIF da interface com os documentos reais, salvar em docs/demo.gif e descomentar a linha abaixo. -->
+<!-- ![Pergunta sobre o Croma FIDC com a fonte aberta no painel lateral](docs/demo.gif) -->
+
+```bash
+uvicorn finrag.api:app --reload   # ou: make api
+```
+
+Com Docker, `make up` sobe a mesma página no mesmo endereço. A página é um único arquivo (`src/finrag/static/index.html`) com HTML, CSS e JavaScript puros: não tem build nem dependências externas e funciona sem internet. Segue o tema claro ou escuro do sistema e, no celular, a fonte abre num painel inferior.
+
+As perguntas de exemplo da tela são sobre os documentos reais da CVM (ver [Dados reais da CVM](#dados-reais-da-cvm)). No modo offline, com o corpus fictício indexado, elas devolvem trechos sem relação com a pergunta; digite uma pergunta sobre o corpus de exemplo, como *"Qual é a taxa de administração do Fundo Exemplo Alpha?"*. Nesse modo, a resposta é o trecho mais relevante, e o custo aparece como zero.
+
 ## Configuração completa
 
 ```bash
@@ -122,6 +139,7 @@ curl -X POST localhost:8000/ask -H "Content-Type: application/json" \
 
 | Serviço | Endereço |
 | :-- | :-- |
+| Interface de perguntas | http://localhost:8000/ |
 | API e documentação interativa | http://localhost:8000/docs |
 | Métricas no formato Prometheus | http://localhost:8000/metrics/ |
 | Prometheus | http://localhost:9090 |
@@ -280,7 +298,8 @@ src/finrag/
 ├── agent.py       agente LangGraph (roteia, recupera, responde, mede)
 ├── llm.py         provedores OpenAI, Anthropic e modo offline, com contagem de tokens
 ├── metrics.py     métricas Prometheus e custo por pergunta
-├── api.py         FastAPI
+├── api.py         FastAPI (/ask e a interface em /)
+├── static/        index.html da interface (HTML, CSS e JS num arquivo só)
 └── pipeline.py    CLI: index, ask, download-cadastro, graph-load
 monitoring/        Prometheus e dashboard do Grafana provisionado
 data/doc_titles.json          título e assunto de cada documento
