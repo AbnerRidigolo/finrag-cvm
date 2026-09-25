@@ -7,7 +7,16 @@ aparece na métrica `finrag_llm_unpriced_calls_total`, para não passar desperce
 
 from prometheus_client import Counter, Histogram
 
-LATENCY_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16, 32)
+# Faixas mais finas entre 2 e 15 s, onde ficam as respostas com LLM (p50 de ~5 a 8 s).
+# Com faixas que dobravam (4, 8, 16), o histogram_quantile interpolava dentro de uma faixa
+# de 8 s e, com poucas perguntas, o p95 aparecia perto de 16 s para respostas de ~9 s.
+LATENCY_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 30, 60)
+
+# Rótulos conhecidos de antemão (ver agent.py). Criar as séries em zero na importação faz
+# o primeiro evento contar: sem isso, a série nasce já valendo 1 e rate() e increase()
+# não enxergam esse primeiro incremento.
+ROUTES = ("normas", "fundos")
+STAGES = ("route", "retrieve", "graph", "generate")
 
 REQUESTS = Counter("finrag_requests_total", "Perguntas respondidas", ["route"])
 ERRORS = Counter("finrag_errors_total", "Falhas ao responder", ["stage"])
@@ -31,6 +40,13 @@ UNPRICED = Counter(
     "finrag_llm_unpriced_calls_total", "Chamadas a modelos sem preço configurado", ["model"]
 )
 EMBEDDING_TOKENS = Counter("finrag_embedding_tokens_total", "Tokens de embeddings", ["model"])
+
+for _route in ROUTES:
+    REQUESTS.labels(_route)
+    REQUEST_LATENCY.labels(_route)
+for _stage in STAGES:
+    ERRORS.labels(_stage)
+    STAGE_LATENCY.labels(_stage)
 
 
 def cost_usd(
