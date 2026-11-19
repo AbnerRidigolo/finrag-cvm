@@ -97,6 +97,10 @@ A própria API serve a página de perguntas em http://localhost:8000/. Cada cita
 
 ### Demonstração offline
 
+![Demonstração do FinRAG com dados fictícios. A interface sugere uma pergunta, exibe a resposta e abre a fonte citada.](docs/demo.gif)
+
+*Captura da interface com o corpus fictício, em modo extrativo e sem chave de API.*
+
 Siga a instalação da [demonstração sem chave de API](#rodando-em-2-minutos-sem-chave-de-api). Em uma cópia com as configurações de `.env.example`, use um índice separado para o corpus fictício:
 
 ```bash
