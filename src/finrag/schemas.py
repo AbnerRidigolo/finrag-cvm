@@ -1,5 +1,7 @@
 """Modelos de dados compartilhados entre ingestão, recuperação, agente e API."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -51,6 +53,8 @@ class Answer(BaseModel):
     question: str
     answer: str
     route: str
+    abstained: bool = False
+    abstention_reason: Literal["no_context", "missing_temporal_evidence"] | None = None
     sources: list[Source] = []
     context: str = Field(default="", exclude=True, description="Contexto enviado ao LLM")
     usage: Usage = Usage()

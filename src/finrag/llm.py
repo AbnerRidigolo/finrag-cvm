@@ -122,13 +122,15 @@ class ExtractiveLLM:
     model = "extractive"
 
     def complete(self, system: str, prompt: str) -> Completion:
+        context, _, _ = prompt.rpartition("\n\nPergunta: ")
+        context = context or prompt
         marker = "[1]"
-        start = prompt.find(marker)
+        start = context.find(marker)
         if start == -1:
             text = "Não encontrei trechos relevantes nos documentos indexados."
         else:
-            end = prompt.find("\n[2]", start)
-            excerpt = prompt[start + len(marker) : end if end != -1 else None].strip()
+            end = context.find("\n[2]", start)
+            excerpt = context[start + len(marker) : end if end != -1 else None].strip()
             text = f"Trecho mais relevante encontrado [1]:\n{excerpt[:800]}"
         return Completion(text=text, provider=self.name, model=self.model)
 

@@ -15,11 +15,12 @@ import operator
 import re
 import time
 from collections.abc import Callable
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
 
 from finrag import metrics
+from finrag.abstention import has_required_temporal_evidence
 from finrag.graph.store import QUERIES, GraphStore
 from finrag.llm import LLM, Completion, strip_code_fence
 from finrag.retrieval.hybrid import HybridRetriever
@@ -37,6 +38,8 @@ Responda em português usando SOMENTE o contexto fornecido.
 Cite as fontes com [n] logo após cada afirmação.
 Se o contexto não responder à pergunta, diga isso claramente em vez de supor."""
 
+INSUFFICIENT_EVIDENCE = "Não encontrei evidência suficiente nas fontes consultadas para responder."
+
 ENTITY_RE = re.compile(r"(?:gestora?|administradora?|fundo)\s+(?:d[oae]s?\s+)?(.+)$", re.IGNORECASE)
 FUNDOS_HINTS = re.compile(r"\b(gestor|gestora|administrador|administradora|cnpj|quais fundos)\b")
 
@@ -50,6 +53,7 @@ class AgentState(TypedDict, total=False):
     rows: list[dict[str, Any]]
     context: str
     answer: str
+    abstention_reason: Literal["no_context", "missing_temporal_evidence"]
     completions: Annotated[list[Completion], operator.add]
     timings: Annotated[list[tuple[str, float]], operator.add]
 
@@ -123,6 +127,7 @@ class FinRAGAgent:
         return {"rows": self.graph.query(state["intent"], state.get("entity", ""))}
 
     def _generate(self, state: AgentState) -> dict:
+        chunks = state.get("chunks", [])
         if state.get("route") == "fundos":
             context = "\n".join(
                 f"[{i}] {json.dumps(r, ensure_ascii=False)}"
@@ -132,9 +137,25 @@ class FinRAGAgent:
             context = "\n\n".join(
                 f"[{i}] ({c.chunk.source}{', ' + c.chunk.article if c.chunk.article else ''})\n"
                 f"{c.chunk.text}"
-                for i, c in enumerate(state.get("chunks", []), 1)
+                for i, c in enumerate(chunks, 1)
             )
-        prompt = f"Contexto:\n{context or '(vazio)'}\n\nPergunta: {state['question']}"
+        if not context:
+            return {
+                "answer": INSUFFICIENT_EVIDENCE,
+                "abstention_reason": "no_context",
+                "context": "",
+            }
+        if (
+            self.llm.name == "extractive"
+            and chunks
+            and not has_required_temporal_evidence(state["question"], chunks[0].chunk.text)
+        ):
+            return {
+                "answer": INSUFFICIENT_EVIDENCE,
+                "abstention_reason": "missing_temporal_evidence",
+                "context": context,
+            }
+        prompt = f"Contexto:\n{context}\n\nPergunta: {state['question']}"
         completion = self.llm.complete(ANSWER_SYSTEM, prompt)
         return {"answer": completion.text, "context": context, "completions": [completion]}
 
@@ -192,6 +213,8 @@ class FinRAGAgent:
             question=question,
             answer=state["answer"],
             route=state["route"],
+            abstained="abstention_reason" in state,
+            abstention_reason=state.get("abstention_reason"),
             sources=sources,
             context=state.get("context", ""),
             usage=self._usage(state, elapsed),
