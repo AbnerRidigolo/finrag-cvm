@@ -93,18 +93,27 @@ Toda resposta traz latência por etapa, tokens e custo estimado (no modo offline
 
 ## Interface
 
-A própria API serve uma página de perguntas em http://localhost:8000/. Cada citação `[n]` da resposta é clicável e abre o trecho original, com o título do documento e o artigo; abaixo da resposta ficam as fontes consultadas, com o score, e uma linha com a rota, a latência total e por etapa, os tokens e o custo.
+A própria API serve a página de perguntas em http://localhost:8000/. Cada citação `[n]` abre o trecho recuperado com o documento e o artigo. A página mostra as fontes consultadas, a rota, a latência total e por etapa, os tokens e o custo.
 
-<!-- TODO: gravar o GIF da interface com os documentos reais, salvar em docs/demo.gif e descomentar a linha abaixo. -->
-<!-- ![Pergunta sobre o Croma FIDC com a fonte aberta no painel lateral](docs/demo.gif) -->
+### Demonstração offline
+
+Siga a instalação da [demonstração sem chave de API](#rodando-em-2-minutos-sem-chave-de-api). Em uma cópia com as configurações de `.env.example`, use um índice separado para o corpus fictício:
 
 ```bash
-uvicorn finrag.api:app --reload   # ou: make api
+export CHROMA_PATH=.chroma/demo
+python -m finrag.pipeline index data/sample/docs
+python -m uvicorn finrag.api:app
 ```
 
-Com Docker, `make up` sobe a mesma página no mesmo endereço. A página é um único arquivo (`src/finrag/static/index.html`) com HTML, CSS e JavaScript puros: não tem build nem dependências externas e funciona sem internet. Segue o tema claro ou escuro do sistema e, no celular, a fonte abre num painel inferior.
+No PowerShell, use `$env:CHROMA_PATH = '.chroma/demo'` na primeira linha.
 
-As perguntas de exemplo da tela são sobre os documentos reais da CVM (ver [Dados reais da CVM](#dados-reais-da-cvm)). No modo offline, com o corpus fictício indexado, elas devolvem trechos sem relação com a pergunta; digite uma pergunta sobre o corpus de exemplo, como *"Qual é a taxa de administração do Fundo Exemplo Alpha?"*. Nesse modo, a resposta é o trecho mais relevante, e o custo aparece como zero.
+1. Abra http://localhost:8000/ e selecione **Qual é a taxa de administração do Fundo Exemplo Alpha?**
+2. A resposta extrativa mostra a taxa fictícia de **1,2% ao ano** e o custo de **US$ 0,00**.
+3. Clique na primeira citação `[1]` para conferir o **Art. 4º** no painel da fonte.
+
+As sugestões aparecem conforme os arquivos disponíveis no índice do agente. Para o corpus fictício, elas referenciam Alpha, Beta e o glossário. Com os [dados reais da CVM](#dados-reais-da-cvm), a página oferece perguntas sobre os documentos reconhecidos que estiverem disponíveis. Se você trocar ou reindexar o corpus com o servidor em execução, reinicie a API para recarregar o índice BM25 e as sugestões.
+
+Com Docker, `make up` serve a página no mesmo endereço. O HTML, CSS e JavaScript funcionam sem dependências externas. A página acompanha o tema do sistema e abre a fonte em um painel inferior no celular.
 
 ## Configuração completa
 
@@ -187,6 +196,10 @@ Para o grafo de fundos, `python -m finrag.pipeline download-cadastro` baixa o `c
 
 ## Resultados
 
+O benchmark publicado usa **1.578 trechos de 16 documentos reais** e **43 perguntas sintéticas revisadas à mão**. Em relação ao RRF, o cross-encoder em CPU elevou o **MRR@5 de 0,77 para 0,87** (diferença pareada de +0,10, IC de 95% de +0,01 a +0,19) e o **p50 de 320 ms para 2.164 ms**. A diferença de Hit@1 entre RRF e busca densa foi **+0,02** (IC de −0,09 a +0,16).
+
+Na avaliação de **30 respostas**, a busca encontrou o artigo esperado em **29** delas. O juiz atribuiu fidelidade máxima às 30, inclusive a uma resposta apoiada no trecho errado para o escopo da pergunta. As notas medem o apoio no contexto recuperado. As métricas publicadas vêm de uma rodada com perguntas que geralmente citam o assunto do documento. Veja os [resultados de recuperação](data/eval/results/retrieval.md) e os [registros da avaliação de respostas](data/eval/results/answer_eval.jsonl).
+
 ### Recuperação nos documentos reais da CVM
 
 Corpus: Resolução CVM 175 (Parte Geral e Anexos Normativos I a XII) e três regulamentos de FIDC, **16 documentos e 1.578 trechos** (ver [Dados reais da CVM](#dados-reais-da-cvm)). Dataset: **43 perguntas sintéticas** geradas pelo `gpt-6-sol` e revisadas à mão, uma ou mais por documento. Embeddings `text-embedding-3-small`, re-ranking com o cross-encoder `mmarco-mMiniLMv2-L12-H384-v1` rodando em CPU, 20 candidatos por método, k = 5. Entre colchetes, o IC de 95% por bootstrap (1.000 reamostragens das perguntas, semente fixa); a latência inclui a chamada de rede à API de embeddings.
@@ -264,6 +277,22 @@ Custo: US$ 0,105. O juiz reconheceu todos os erros, e separou bem os dois crité
 | Híbrido (RRF) | 0,80 [0,60–1,00] | 1,00 [1,00–1,00] | 0,88 [0,72–1,00] |
 
 Com 10 perguntas, os intervalos se sobrepõem quase por inteiro, e nenhuma configuração se destaca.
+
+### Casos escritos à mão
+
+Os [seis casos do corpus fictício](data/eval/challenge_questions.jsonl) incluem paráfrase, comparação entre documentos e combinação de artigos. Em dois casos falta evidência para responder por completo. Cada caso inclui um gabarito e os artigos necessários, quando existirem.
+
+Com o índice e as configurações da [demonstração offline](#demonstração-offline), execute:
+
+```bash
+python -m finrag.eval.challenge_eval data/eval/challenge_questions.jsonl
+```
+
+O relatório conta cobertura completa quando **todos** os artigos do gabarito aparecem entre as fontes do agente. Compare a resposta e as citações com o gabarito para verificar se o agente usou as evidências. Nos casos sem evidência suficiente, confira se ele reconhece a lacuna e evita inferir números, datas ou fatos. O modo extrativo devolve o primeiro trecho recuperado mesmo quando ele é insuficiente. A checagem de abstenção exige a leitura da resposta.
+
+Na execução offline, a busca trouxe todas as evidências em **2 dos 4 casos respondíveis** no top 5. Nos dois casos restantes faltou um artigo. Nos dois casos sem evidência suficiente, a resposta extrativa mostrou um trecho relacionado sem explicitar a lacuna.
+
+O [conjunto manual da CVM](data/eval/cvm_challenge_questions.jsonl) inclui três casos sobre o Croma FIDC e fundos de índice. Os gabaritos usam os artigos registrados no benchmark publicado. Para rodá-lo, use o índice de documentos reais e passe `data/eval/cvm_challenge_questions.jsonl` ao mesmo comando. Essa rodada manual ainda aguarda medição.
 
 ## Decisões técnicas
 
