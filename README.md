@@ -292,9 +292,11 @@ Com o índice e as configurações da [demonstração offline](#demonstração-o
 python -m finrag.eval.challenge_eval data/eval/challenge_questions.jsonl
 ```
 
-O relatório conta cobertura completa quando **todos** os artigos do gabarito aparecem entre as fontes do agente. Compare a resposta e as citações com o gabarito para verificar se o agente usou as evidências. Nos casos sem evidência suficiente, confira se ele reconhece a lacuna e evita inferir números, datas ou fatos. O modo extrativo devolve o primeiro trecho recuperado mesmo quando ele é insuficiente. A checagem de abstenção exige a leitura da resposta.
+O relatório conta cobertura completa quando **todos** os artigos do gabarito aparecem entre as fontes do agente. Também conta abstenções corretas e indevidas a partir do campo `abstained` da API. O CI usa `--verify-abstention` para exigir que o modo offline se abstenha nos casos sem evidência e continue respondendo aos casos respondíveis da amostra.
 
-Na execução offline, a busca trouxe todas as evidências em **2 dos 4 casos respondíveis** no top 5. Nos dois casos restantes faltou um artigo. Nos dois casos sem evidência suficiente, a resposta extrativa mostrou um trecho relacionado sem explicitar a lacuna.
+O agente se abstém quando não há contexto. No modo extrativo, também verifica se o trecho que seria exibido contém a evidência temporal mínima para duas classes de perguntas: data de um evento passado e desempenho histórico com ano explícito. O campo `abstention_reason` registra o motivo e as fontes consultadas ficam disponíveis para inspeção. A regra é conservadora e não determina se o conteúdo recuperado responde corretamente à pergunta.
+
+Na execução offline, a busca trouxe todas as evidências em **2 dos 4 casos respondíveis** no top 5. Nos dois casos restantes faltou um artigo. O relatório de abstenção mede uma decisão separada da cobertura de recuperação e da correção da resposta.
 
 O [conjunto manual da CVM](data/eval/cvm_challenge_questions.jsonl) inclui três casos sobre o Croma FIDC e fundos de índice. Os gabaritos usam os artigos registrados no benchmark publicado. Para rodá-lo, use o índice de documentos reais e passe `data/eval/cvm_challenge_questions.jsonl` ao mesmo comando. Essa rodada manual ainda aguarda medição.
 

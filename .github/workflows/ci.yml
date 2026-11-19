@@ -22,3 +22,4 @@ jobs:
         run: |
           python -m finrag.pipeline index data/sample/docs
           python -m finrag.eval.retrieval_eval data/eval/questions.jsonl
+          python -m finrag.eval.challenge_eval data/eval/challenge_questions.jsonl --verify-abstention
