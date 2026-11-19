@@ -11,6 +11,10 @@ from fastapi.testclient import TestClient
 from finrag.agent import FinRAGAgent
 from finrag.api import create_app
 from finrag.llm import ExtractiveLLM
+from finrag.retrieval.dense import DenseStore
+from finrag.retrieval.embeddings import HashingEmbedder
+from finrag.retrieval.hybrid import HybridRetriever
+from finrag.schemas import Chunk
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,6 +38,46 @@ def test_pagina_inicial_serve_o_html(client):
 
 def test_pagina_fora_do_schema_da_api(client):
     assert "/" not in client.get("/openapi.json").json()["paths"]
+
+
+def test_sugestoes_do_corpus_ficticio(client):
+    response = client.get("/examples")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["corpus"] == "sample"
+    assert len(data["questions"]) == 4
+    assert any("Fundo Exemplo Alpha" in item["question"] for item in data["questions"])
+    assert all(item["document"] == "Exemplo fictício" for item in data["questions"])
+
+
+def test_sugestoes_seguem_os_arquivos_indexados(tmp_path):
+    dense = DenseStore(HashingEmbedder(), path=str(tmp_path / "examples"), collection="examples")
+    retriever = HybridRetriever(dense)
+    client = TestClient(create_app(FinRAGAgent(ExtractiveLLM(), retriever)))
+
+    assert client.get("/examples").json() == {"corpus": "empty", "questions": []}
+
+    dense.add(
+        [
+            Chunk(
+                id="croma",
+                text="Art. 1º Regulamento do Croma.",
+                source="regulamento_fidc_croma_2025-09.pdf",
+            )
+        ]
+    )
+    retriever.refresh()
+    data = client.get("/examples").json()
+    assert data["corpus"] == "cvm"
+    assert [item["topic"] for item in data["questions"]] == ["Croma FIDC"]
+
+    dense.add(
+        [Chunk(id="alpha", text="Art. 4º Taxa.", source="regulamento_fundo_exemplo_alpha.txt")]
+    )
+    retriever.refresh()
+    data = client.get("/examples").json()
+    assert data["corpus"] == "mixed"
+    assert {item["topic"] for item in data["questions"]} == {"Alpha FIDC", "Croma FIDC"}
 
 
 def test_fluxo_da_pagina_com_agente_offline(client):
